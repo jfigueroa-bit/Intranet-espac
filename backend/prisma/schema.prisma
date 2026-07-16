@@ -56,8 +56,8 @@ model User {
   mustChangePassword  Boolean    @default(true)
   role                Role       @default(EMPLEADO)
   cargo               String?    // puesto (ej: "Asesora de Ventas")
-  scheduleUrl         String?    // horario subido (archivo)
-  scheduleNote        String?    // horario en texto, opcional
+  schedule            Json       @default("[]") // horario semanal: [{ day, active, start, end }]
+  scheduleNote        String?    // nota adicional opcional (ej: "Turno rotativo cada 2 semanas")
   workStatus          WorkStatus @default(PRESENCIAL)
   hierarchyOrder       Int        @default(0)   // orden dentro de su nivel, editable por admin
   managerId           Int?       // jefe directo, para el organigrama
