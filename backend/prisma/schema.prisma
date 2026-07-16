@@ -31,6 +31,7 @@ enum WorkStatus {
 model Area {
   id        Int        @id @default(autoincrement())
   name      String     @unique
+  color     String     @default("#1c2b4a") // color del tag, en formato hexadecimal
   createdAt DateTime   @default(now())
   users     UserArea[]
 }
