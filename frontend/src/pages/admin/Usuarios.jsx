@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../../api/client';
+import AreaChip from '../../components/AreaChip.jsx';
 
 const ROLES = ['ADMIN', 'GERENCIA', 'RRHH', 'MARKETING', 'VENTAS', 'INSTRUCTOR', 'EMPLEADO'];
 
@@ -11,6 +12,8 @@ export default function Usuarios() {
   const [credencialReset, setCredencialReset] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
+  const [editandoId, setEditandoId] = useState(null);
+  const [edit, setEdit] = useState(null);
 
   useEffect(() => { cargar(); }, []);
 
@@ -22,6 +25,13 @@ export default function Usuarios() {
 
   function toggleArea(areaId) {
     setForm((f) => ({
+      ...f,
+      areaIds: f.areaIds.includes(areaId) ? f.areaIds.filter((id) => id !== areaId) : [...f.areaIds, areaId],
+    }));
+  }
+
+  function toggleAreaEdit(areaId) {
+    setEdit((f) => ({
       ...f,
       areaIds: f.areaIds.includes(areaId) ? f.areaIds.filter((id) => id !== areaId) : [...f.areaIds, areaId],
     }));
@@ -50,6 +60,30 @@ export default function Usuarios() {
 
   async function actualizarRol(id, role) {
     await api.patch(`/users/${id}`, { role });
+    cargar();
+  }
+
+  function empezarEdicion(u) {
+    setEditandoId(u.id);
+    setCredencialReset(null);
+    setEdit({
+      firstName: u.firstName,
+      lastName: u.lastName,
+      email: u.email,
+      cargo: u.cargo || '',
+      areaIds: u.areas.map((a) => a.area.id),
+    });
+  }
+
+  async function guardarEdicion(id) {
+    await api.patch(`/users/${id}`, edit);
+    setEditandoId(null);
+    cargar();
+  }
+
+  async function eliminarUsuario(id) {
+    if (!confirm('¿Eliminar a este usuario? Ya no podrá iniciar sesión ni aparecerá en la Compañía.')) return;
+    await api.delete(`/users/${id}`);
     cargar();
   }
 
@@ -88,7 +122,7 @@ export default function Usuarios() {
               </select>
             </div>
             <div className="field">
-              <label>Áreas</label>
+              <label>Áreas (puedes elegir varias)</label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {areas.map((a) => (
                   <label key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, width: 'auto' }}>
@@ -124,33 +158,68 @@ export default function Usuarios() {
             <tr>
               <th>Usuario</th>
               <th>Nombre</th>
-              <th>Rol</th>
+              <th>Correo</th>
               <th>Cargo</th>
+              <th>Rol</th>
+              <th>Áreas</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {usuarios.map((u) => (
-              <tr key={u.id}>
-                <td>{u.username}</td>
-                <td>{u.firstName} {u.lastName}</td>
-                <td>
-                  <select value={u.role} onChange={(e) => actualizarRol(u.id, e.target.value)}>
-                    {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-                  </select>
-                </td>
-                <td>{u.cargo || '—'}</td>
-                <td>
-                  <button className="btn secondary" onClick={() => resetPassword(u.id)}>
-                    Restablecer contraseña
-                  </button>
-                  {credencialReset?.id === u.id && (
-                    <div style={{ fontSize: 12, marginTop: 4 }}>
-                      Nueva contraseña: <strong>{credencialReset.password}</strong>
+              editandoId === u.id ? (
+                <tr key={u.id}>
+                  <td>{u.username}</td>
+                  <td style={{ display: 'flex', gap: 4 }}>
+                    <input value={edit.firstName} onChange={(e) => setEdit({ ...edit, firstName: e.target.value })} style={{ width: 90 }} />
+                    <input value={edit.lastName} onChange={(e) => setEdit({ ...edit, lastName: e.target.value })} style={{ width: 90 }} />
+                  </td>
+                  <td><input value={edit.email} onChange={(e) => setEdit({ ...edit, email: e.target.value })} style={{ width: 160 }} /></td>
+                  <td><input value={edit.cargo} onChange={(e) => setEdit({ ...edit, cargo: e.target.value })} style={{ width: 130 }} /></td>
+                  <td>{u.role}</td>
+                  <td>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, maxWidth: 200 }}>
+                      {areas.map((a) => (
+                        <label key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 12, width: 'auto' }}>
+                          <input type="checkbox" style={{ width: 'auto' }} checked={edit.areaIds.includes(a.id)} onChange={() => toggleAreaEdit(a.id)} />
+                          {a.name}
+                        </label>
+                      ))}
                     </div>
-                  )}
-                </td>
-              </tr>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button className="btn" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => guardarEdicion(u.id)}>Guardar</button>
+                      <button className="btn secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => setEditandoId(null)}>Cancelar</button>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                <tr key={u.id}>
+                  <td>{u.username}</td>
+                  <td>{u.firstName} {u.lastName}</td>
+                  <td>{u.email}</td>
+                  <td>{u.cargo || '—'}</td>
+                  <td>
+                    <select value={u.role} onChange={(e) => actualizarRol(u.id, e.target.value)}>
+                      {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                  </td>
+                  <td>{u.areas.map((a) => <AreaChip key={a.area.id} area={a.area} />)}</td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      <button className="btn secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => empezarEdicion(u)}>Editar</button>
+                      <button className="btn secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => resetPassword(u.id)}>Resetear clave</button>
+                      <button className="btn danger" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => eliminarUsuario(u.id)}>Eliminar</button>
+                    </div>
+                    {credencialReset?.id === u.id && (
+                      <div style={{ fontSize: 12, marginTop: 4 }}>
+                        Nueva contraseña: <strong>{credencialReset.password}</strong>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              )
             ))}
           </tbody>
         </table>
