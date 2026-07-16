@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../api/client';
+import AreaChip from '../components/AreaChip.jsx';
 
 const ESTADO_LABEL = { PRESENCIAL: 'Presencial', HOME_OFFICE: 'Home Office', VACACIONES: 'Vacaciones' };
 
@@ -34,7 +35,7 @@ export default function Compania() {
                 <td>{u.firstName} {u.lastName}</td>
                 <td>{u.cargo || '—'}</td>
                 <td>{u.email}</td>
-                <td>{u.areas?.map((a) => a.area.name).join(', ') || '—'}</td>
+                <td>{u.areas?.map((a) => <AreaChip key={a.area.id} area={a.area} />) || '—'}</td>
                 <td>
                   <span className={`badge ${u.workStatus.toLowerCase()}`}>
                     {ESTADO_LABEL[u.workStatus]}
