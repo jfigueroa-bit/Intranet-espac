@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '../api/client';
 import AreaChip from '../components/AreaChip.jsx';
+import { DIAS } from '../utils/dias';
 
 const ROLE_LABEL = {
   ADMIN: 'Administrador', GERENCIA: 'Gerencia', RRHH: 'Recursos Humanos',
@@ -74,16 +75,36 @@ export default function MiPerfil() {
 
       <div className="card">
         <label style={campoLabel}>Mi horario</label>
-        {perfil.scheduleUrl && (
-          <div style={{ marginTop: 6 }}>
-            <a href={perfil.scheduleUrl} target="_blank" rel="noreferrer">Ver archivo de horario</a>
+        {perfil.schedule?.some((d) => d.active) ? (
+          <table style={{ marginTop: 10 }}>
+            <thead>
+              <tr>
+                <th>Día</th>
+                <th>Entrada</th>
+                <th>Salida</th>
+              </tr>
+            </thead>
+            <tbody>
+              {DIAS.map(({ key, label }) => {
+                const dia = perfil.schedule.find((d) => d.day === key);
+                if (!dia?.active) return null;
+                return (
+                  <tr key={key}>
+                    <td>{label}</td>
+                    <td>{dia.start}</td>
+                    <td>{dia.end}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        ) : (
+          <div style={{ marginTop: 6, color: 'var(--text-muted)', fontSize: 13 }}>
+            Todavía no se ha asignado tu horario. Lo puede asignar Administración o Recursos Humanos.
           </div>
         )}
-        {perfil.scheduleNote && <div style={{ marginTop: 6 }}>{perfil.scheduleNote}</div>}
-        {!perfil.scheduleUrl && !perfil.scheduleNote && (
-          <div style={{ marginTop: 6, color: 'var(--text-muted)', fontSize: 13 }}>
-            Todavía no se ha subido tu horario. Lo puede subir Administración o Recursos Humanos.
-          </div>
+        {perfil.scheduleNote && (
+          <div style={{ marginTop: 10, fontSize: 13, color: 'var(--text-muted)' }}>{perfil.scheduleNote}</div>
         )}
       </div>
     </div>
