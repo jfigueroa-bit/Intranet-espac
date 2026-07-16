@@ -4,6 +4,7 @@ const prisma = require('../lib/prisma');
 const { requireAuth } = require('../middleware/auth');
 const { requireRole } = require('../middleware/roles');
 const { generarUsername, generarPasswordTemporal } = require('../utils/username');
+const { normalizarHorario } = require('../utils/schedule');
 const { notificar } = require('../utils/socket');
 
 const router = express.Router();
@@ -12,7 +13,7 @@ const USER_LISTADO = {
   id: true, username: true, firstName: true, lastName: true, email: true,
   role: true, cargo: true, workStatus: true, isActive: true,
   hierarchyOrder: true, managerId: true, vacationDaysTotal: true,
-  vacationDaysUsed: true, scheduleUrl: true, scheduleNote: true,
+  vacationDaysUsed: true, schedule: true, scheduleNote: true,
   areas: { include: { area: true } },
 };
 
@@ -127,10 +128,10 @@ router.patch(
   requireRole('ADMIN', 'RRHH'),
   async (req, res) => {
     const id = Number(req.params.id);
-    const { scheduleUrl, scheduleNote } = req.body;
+    const { schedule, scheduleNote } = req.body;
     const actualizado = await prisma.user.update({
       where: { id },
-      data: { scheduleUrl, scheduleNote },
+      data: { schedule: normalizarHorario(schedule), scheduleNote },
       select: USER_LISTADO,
     });
 
