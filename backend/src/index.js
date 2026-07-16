@@ -1,4 +1,5 @@
 require('dotenv').config();
+require('express-async-errors');
 const express = require('express');
 const cors = require('cors');
 const http = require('http');
@@ -25,6 +26,18 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/areas', areasRoutes);
 app.use('/api/notifications', notificationsRoutes);
+
+// Manejador de errores general: si una ruta falla sin haberlo previsto,
+// devolvemos un mensaje claro en vez de que el navegador reciba una
+// respuesta vacía o incomprensible.
+app.use((err, req, res, next) => {
+  console.error(err);
+  if (err?.code === 'P2002') {
+    // Error típico de Prisma: se intentó guardar un valor único (correo, usuario) duplicado
+    return res.status(400).json({ error: 'Ya existe un registro con ese dato único (correo o usuario duplicado)' });
+  }
+  res.status(500).json({ error: 'Ocurrió un error inesperado en el servidor' });
+});
 
 // --- Socket.io: tiempo real (notificaciones, y luego chat/solicitudes) ---
 const io = new Server(server, {
