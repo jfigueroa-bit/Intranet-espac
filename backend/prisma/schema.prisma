@@ -1,0 +1,85 @@
+// Fase 1: Base del sistema (usuarios, roles, áreas/tags, notificaciones)
+// Los módulos de fases siguientes (Anuncios, Documentos, Vacaciones, Chat,
+// Programaciones, Alumnos, Solicitudes) se irán agregando a este mismo
+// archivo en cada fase, sin tocar lo ya construido.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN       // acceso total, gestiona usuarios, áreas, jerarquía
+  GERENCIA
+  RRHH
+  MARKETING
+  VENTAS
+  INSTRUCTOR
+  EMPLEADO
+}
+
+enum WorkStatus {
+  PRESENCIAL
+  HOME_OFFICE
+  VACACIONES
+}
+
+model Area {
+  id        Int        @id @default(autoincrement())
+  name      String     @unique
+  createdAt DateTime   @default(now())
+  users     UserArea[]
+}
+
+model UserArea {
+  userId Int
+  areaId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  area   Area @relation(fields: [areaId], references: [id], onDelete: Cascade)
+
+  @@id([userId, areaId])
+}
+
+model User {
+  id                  Int        @id @default(autoincrement())
+  sequenceNumber      Int        @unique // usado para generar el username (0001, 0002...)
+  username            String     @unique // ej: J.Rios.Espac.0001
+  firstName           String
+  lastName             String
+  email               String     @unique // correo institucional
+  passwordHash        String
+  mustChangePassword  Boolean    @default(true)
+  role                Role       @default(EMPLEADO)
+  cargo               String?    // puesto (ej: "Asesora de Ventas")
+  scheduleUrl         String?    // horario subido (archivo)
+  scheduleNote        String?    // horario en texto, opcional
+  workStatus          WorkStatus @default(PRESENCIAL)
+  hierarchyOrder       Int        @default(0)   // orden dentro de su nivel, editable por admin
+  managerId           Int?       // jefe directo, para el organigrama
+  manager             User?      @relation("Jerarquia", fields: [managerId], references: [id])
+  reports             User[]     @relation("Jerarquia")
+  vacationDaysTotal   Int        @default(30)
+  vacationDaysUsed    Int        @default(0)
+  isActive            Boolean    @default(true)
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+
+  areas         UserArea[]
+  notifications Notification[]
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // "SISTEMA", "SOLICITUD", "PROGRAMACION", "ANUNCIO", "VACACIONES", "CHAT"...
+  title     String
+  message   String
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
