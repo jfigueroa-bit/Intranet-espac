@@ -6,13 +6,14 @@ import MiPerfil from './pages/MiPerfil.jsx';
 import Compania from './pages/Compania.jsx';
 import Usuarios from './pages/admin/Usuarios.jsx';
 import Areas from './pages/admin/Areas.jsx';
+import Horarios from './pages/Horarios.jsx';
 import Shell from './components/Shell.jsx';
 
-function RutaProtegida({ children, soloAdmin = false }) {
+function RutaProtegida({ children, roles = null }) {
   const { user, loading } = useAuth();
   if (loading) return null;
   if (!user) return <Navigate to="/login" replace />;
-  if (soloAdmin && user.role !== 'ADMIN') return <Navigate to="/" replace />;
+  if (roles && !roles.includes(user.role)) return <Navigate to="/" replace />;
   return children;
 }
 
@@ -34,7 +35,7 @@ export default function App() {
         <Route
           path="admin/usuarios"
           element={
-            <RutaProtegida soloAdmin>
+            <RutaProtegida roles={['ADMIN']}>
               <Usuarios />
             </RutaProtegida>
           }
@@ -42,8 +43,16 @@ export default function App() {
         <Route
           path="admin/areas"
           element={
-            <RutaProtegida soloAdmin>
+            <RutaProtegida roles={['ADMIN']}>
               <Areas />
+            </RutaProtegida>
+          }
+        />
+        <Route
+          path="horarios"
+          element={
+            <RutaProtegida roles={['ADMIN', 'RRHH']}>
+              <Horarios />
             </RutaProtegida>
           }
         />
