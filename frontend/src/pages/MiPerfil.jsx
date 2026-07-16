@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../api/client';
+import AreaChip from '../components/AreaChip.jsx';
 
 const ROLE_LABEL = {
   ADMIN: 'Administrador', GERENCIA: 'Gerencia', RRHH: 'Recursos Humanos',
@@ -40,7 +41,7 @@ export default function MiPerfil() {
           <div><label style={campoLabel}>Correo institucional</label><div>{perfil.email}</div></div>
           <div><label style={campoLabel}>Cargo</label><div>{perfil.cargo || '—'}</div></div>
           <div><label style={campoLabel}>Rol en el sistema</label><div>{ROLE_LABEL[perfil.role]}</div></div>
-          <div><label style={campoLabel}>Áreas</label><div>{perfil.areas?.map((a) => a.area.name).join(', ') || '—'}</div></div>
+          <div><label style={campoLabel}>Áreas</label><div>{perfil.areas?.map((a) => <AreaChip key={a.area.id} area={a.area} />) || '—'}</div></div>
         </div>
       </div>
 
@@ -81,7 +82,7 @@ export default function MiPerfil() {
         {perfil.scheduleNote && <div style={{ marginTop: 6 }}>{perfil.scheduleNote}</div>}
         {!perfil.scheduleUrl && !perfil.scheduleNote && (
           <div style={{ marginTop: 6, color: 'var(--text-muted)', fontSize: 13 }}>
-            Todavía no se ha subido tu horario. Lo puede subir Admin, RRHH, Marketing o Ventas.
+            Todavía no se ha subido tu horario. Lo puede subir Administración o Recursos Humanos.
           </div>
         )}
       </div>
