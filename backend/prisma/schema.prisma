@@ -71,6 +71,29 @@ model User {
 
   areas         UserArea[]
   notifications Notification[]
+  announcements Announcement[]
+  events        CalendarEvent[]
+}
+
+model Announcement {
+  id        Int      @id @default(autoincrement())
+  title     String
+  content   String
+  pinned    Boolean  @default(false)
+  authorId  Int
+  author    User     @relation(fields: [authorId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model CalendarEvent {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String?
+  date        DateTime // solo se usa la fecha (día); la hora se ignora
+  color       String   @default("#1c2b4a")
+  createdById Int
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
 }
 
 model Notification {
