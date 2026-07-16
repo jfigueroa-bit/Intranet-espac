@@ -4,6 +4,8 @@ import Login from './pages/Login.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import MiPerfil from './pages/MiPerfil.jsx';
 import Compania from './pages/Compania.jsx';
+import Anuncios from './pages/Anuncios.jsx';
+import Calendario from './pages/Calendario.jsx';
 import Usuarios from './pages/admin/Usuarios.jsx';
 import Areas from './pages/admin/Areas.jsx';
 import Horarios from './pages/Horarios.jsx';
@@ -30,6 +32,8 @@ export default function App() {
         }
       >
         <Route index element={<Dashboard />} />
+        <Route path="anuncios" element={<Anuncios />} />
+        <Route path="calendario" element={<Calendario />} />
         <Route path="perfil" element={<MiPerfil />} />
         <Route path="compania" element={<Compania />} />
         <Route
