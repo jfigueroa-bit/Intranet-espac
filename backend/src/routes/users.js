@@ -62,12 +62,19 @@ router.post('/', requireAuth, requireRole('ADMIN'), async (req, res) => {
   res.status(201).json({ user: nuevo, passwordTemporal });
 });
 
-// PATCH /api/users/:id  -> Admin edita rol, cargo, área, estado laboral, jefe directo, orden jerárquico
+// PATCH /api/users/:id  -> Admin edita cualquier dato del usuario (nombre, correo, cargo,
+// rol, áreas/tags -uno o varios-, jefe directo, orden jerárquico, estado activo)
 router.patch('/:id', requireAuth, requireRole('ADMIN'), async (req, res) => {
   const id = Number(req.params.id);
-  const { role, cargo, workStatus, managerId, hierarchyOrder, areaIds, isActive } = req.body;
+  const {
+    firstName, lastName, email, role, cargo, workStatus,
+    managerId, hierarchyOrder, areaIds, isActive,
+  } = req.body;
 
   const data = {};
+  if (firstName !== undefined) data.firstName = firstName;
+  if (lastName !== undefined) data.lastName = lastName;
+  if (email !== undefined) data.email = email;
   if (role !== undefined) data.role = role;
   if (cargo !== undefined) data.cargo = cargo;
   if (workStatus !== undefined) data.workStatus = workStatus;
@@ -82,6 +89,18 @@ router.patch('/:id', requireAuth, requireRole('ADMIN'), async (req, res) => {
 
   const actualizado = await prisma.user.update({ where: { id }, data, select: USER_LISTADO });
   res.json(actualizado);
+});
+
+// DELETE /api/users/:id -> Admin "elimina" un usuario. No se borra de la base de datos
+// (para no perder su historial de vacaciones, solicitudes, etc.), simplemente se
+// desactiva: deja de aparecer en la Compañía y ya no puede iniciar sesión.
+router.delete('/:id', requireAuth, requireRole('ADMIN'), async (req, res) => {
+  const id = Number(req.params.id);
+  if (id === req.user.id) {
+    return res.status(400).json({ error: 'No puedes eliminar tu propio usuario' });
+  }
+  await prisma.user.update({ where: { id }, data: { isActive: false } });
+  res.json({ ok: true });
 });
 
 // PATCH /api/users/:id/estado -> cualquier usuario cambia SU PROPIO estado (presencial/home office)
@@ -101,11 +120,11 @@ router.patch('/:id/estado', requireAuth, async (req, res) => {
   res.json(actualizado);
 });
 
-// PATCH /api/users/:id/horario -> Admin, RRHH, Marketing o Ventas suben el horario de alguien
+// PATCH /api/users/:id/horario -> SOLO Admin o RRHH pueden subir el horario de alguien
 router.patch(
   '/:id/horario',
   requireAuth,
-  requireRole('ADMIN', 'RRHH', 'MARKETING', 'VENTAS'),
+  requireRole('ADMIN', 'RRHH'),
   async (req, res) => {
     const id = Number(req.params.id);
     const { scheduleUrl, scheduleNote } = req.body;
