@@ -11,14 +11,28 @@ router.get('/', requireAuth, async (req, res) => {
   res.json(areas);
 });
 
-// POST /api/areas -> Admin crea un tag/área nuevo (ej: "Vuelos", "Simuladores")
+// POST /api/areas -> Admin crea un tag/área nuevo, con color (ej: "Vuelos", "#2e7d32")
 router.post('/', requireAuth, requireRole('ADMIN'), async (req, res) => {
-  const { name } = req.body;
+  const { name, color } = req.body;
   if (!name || !name.trim()) {
     return res.status(400).json({ error: 'El nombre del área es obligatorio' });
   }
-  const area = await prisma.area.create({ data: { name: name.trim() } });
+  const area = await prisma.area.create({
+    data: { name: name.trim(), color: color || '#1c2b4a' },
+  });
   res.status(201).json(area);
+});
+
+// PATCH /api/areas/:id -> Admin edita nombre y/o color de un área
+router.patch('/:id', requireAuth, requireRole('ADMIN'), async (req, res) => {
+  const id = Number(req.params.id);
+  const { name, color } = req.body;
+  const data = {};
+  if (name !== undefined) data.name = name.trim();
+  if (color !== undefined) data.color = color;
+
+  const area = await prisma.area.update({ where: { id }, data });
+  res.json(area);
 });
 
 // DELETE /api/areas/:id -> Admin elimina un área
