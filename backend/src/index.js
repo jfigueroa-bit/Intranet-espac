@@ -10,6 +10,8 @@ const authRoutes = require('./routes/auth');
 const usersRoutes = require('./routes/users');
 const areasRoutes = require('./routes/areas');
 const notificationsRoutes = require('./routes/notifications');
+const announcementsRoutes = require('./routes/announcements');
+const eventsRoutes = require('./routes/events');
 const { setIO, salaDeUsuario } = require('./utils/socket');
 
 const app = express();
@@ -26,6 +28,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/areas', areasRoutes);
 app.use('/api/notifications', notificationsRoutes);
+app.use('/api/announcements', announcementsRoutes);
+app.use('/api/events', eventsRoutes);
 
 // Manejador de errores general: si una ruta falla sin haberlo previsto,
 // devolvemos un mensaje claro en vez de que el navegador reciba una
