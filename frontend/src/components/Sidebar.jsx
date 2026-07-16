@@ -25,6 +25,10 @@ export default function Sidebar() {
       <NavLink to="/perfil">Mi Perfil</NavLink>
       <NavLink to="/compania">Compañía</NavLink>
 
+      {(user?.role === 'ADMIN' || user?.role === 'RRHH') && (
+        <NavLink to="/horarios">Horarios</NavLink>
+      )}
+
       {user?.role === 'ADMIN' && (
         <>
           <div style={{ fontSize: 11, opacity: 0.6, margin: '16px 8px 4px' }}>ADMINISTRACIÓN</div>
