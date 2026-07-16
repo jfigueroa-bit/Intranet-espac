@@ -4,8 +4,6 @@ import { useAuth } from '../context/AuthContext';
 // Los módulos marcados como "proximo" se agregarán en las siguientes fases
 // del proyecto. Ya están aquí para que se vea la estructura final completa.
 const proximamente = [
-  'Calendario',
-  'Anuncios',
   'Documentos',
   'Vacaciones',
   'Chat interno',
@@ -22,6 +20,8 @@ export default function Sidebar() {
       <div className="logo">ESPAC · Intranet</div>
 
       <NavLink to="/" end>Inicio</NavLink>
+      <NavLink to="/anuncios">Anuncios</NavLink>
+      <NavLink to="/calendario">Calendario</NavLink>
       <NavLink to="/perfil">Mi Perfil</NavLink>
       <NavLink to="/compania">Compañía</NavLink>
 
