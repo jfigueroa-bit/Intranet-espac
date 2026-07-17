@@ -102,6 +102,8 @@ export default function Usuarios() {
         <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
           El usuario y la contraseña temporal se generan automáticamente. Comparte esos
           datos con la persona; al ingresar por primera vez le pedirá crear su propia contraseña.
+          Si le asignas un "Jefe directo" a alguien más (aquí abajo, al editarlo), esa persona
+          podrá subir documentos para su equipo automáticamente.
         </p>
         <form onSubmit={crearUsuario}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
