@@ -72,11 +72,17 @@ export default function Usuarios() {
       email: u.email,
       cargo: u.cargo || '',
       areaIds: u.areas.map((a) => a.area.id),
+      managerId: u.managerId || '',
+      hierarchyOrder: u.hierarchyOrder ?? 0,
     });
   }
 
   async function guardarEdicion(id) {
-    await api.patch(`/users/${id}`, edit);
+    await api.patch(`/users/${id}`, {
+      ...edit,
+      managerId: edit.managerId === '' ? null : Number(edit.managerId),
+      hierarchyOrder: Number(edit.hierarchyOrder) || 0,
+    });
     setEditandoId(null);
     cargar();
   }
@@ -162,6 +168,7 @@ export default function Usuarios() {
               <th>Cargo</th>
               <th>Rol</th>
               <th>Áreas</th>
+              <th>Jefe directo</th>
               <th></th>
             </tr>
           </thead>
@@ -188,6 +195,22 @@ export default function Usuarios() {
                     </div>
                   </td>
                   <td>
+                    <select value={edit.managerId} onChange={(e) => setEdit({ ...edit, managerId: e.target.value })} style={{ fontSize: 12 }}>
+                      <option value="">Sin jefe directo</option>
+                      {usuarios.filter((o) => o.id !== u.id).map((o) => (
+                        <option key={o.id} value={o.id}>{o.firstName} {o.lastName}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      value={edit.hierarchyOrder}
+                      onChange={(e) => setEdit({ ...edit, hierarchyOrder: e.target.value })}
+                      placeholder="Orden"
+                      style={{ marginTop: 4, fontSize: 12, width: 70 }}
+                      title="Orden dentro de su mismo nivel (menor número aparece primero)"
+                    />
+                  </td>
+                  <td>
                     <div style={{ display: 'flex', gap: 4 }}>
                       <button className="btn" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => guardarEdicion(u.id)}>Guardar</button>
                       <button className="btn secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => setEditandoId(null)}>Cancelar</button>
@@ -206,6 +229,9 @@ export default function Usuarios() {
                     </select>
                   </td>
                   <td>{u.areas.map((a) => <AreaChip key={a.area.id} area={a.area} />)}</td>
+                  <td style={{ fontSize: 13 }}>
+                    {u.managerId ? (usuarios.find((o) => o.id === u.managerId)?.firstName + ' ' + usuarios.find((o) => o.id === u.managerId)?.lastName) : '—'}
+                  </td>
                   <td>
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                       <button className="btn secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => empezarEdicion(u)}>Editar</button>
