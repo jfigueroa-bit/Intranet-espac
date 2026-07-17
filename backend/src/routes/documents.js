@@ -122,7 +122,7 @@ router.post('/', requireAuth, requireGestorDocumentos, async (req, res) => {
       mimeType: mimeType || 'application/octet-stream',
       fileData,
       scope: scope === 'PERSONAL' ? 'PERSONAL' : 'GENERAL',
-      documentTypeId: documentTypeId || null,
+      documentTypeId: documentTypeId ? Number(documentTypeId) : null,
       ownerId: scope === 'PERSONAL' ? Number(ownerId) : null,
       uploadedById: req.user.id,
     },
