@@ -27,6 +27,27 @@ router.get('/', requireAuth, async (req, res) => {
   res.json(users);
 });
 
+// GET /api/users/:id/firma -> trae la firma digital guardada de alguien, para incrustarla
+// al generar un documento. Solo quien puede crear documentos (Admin, RRHH, o un jefe de
+// área) puede pedir la firma de otra persona; cualquiera puede pedir la suya propia.
+router.get('/:id/firma', requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+
+  if (id !== req.user.id) {
+    const esAdmin = req.user.role === 'ADMIN';
+    const esRRHH = req.user.role === 'RRHH';
+    if (!esAdmin && !esRRHH) {
+      const reportes = await prisma.user.count({ where: { managerId: req.user.id, isActive: true } });
+      if (reportes === 0) {
+        return res.status(403).json({ error: 'No tienes permiso para ver la firma de esa persona' });
+      }
+    }
+  }
+
+  const persona = await prisma.user.findUnique({ where: { id }, select: { signatureData: true } });
+  res.json({ signatureData: persona?.signatureData || null });
+});
+
 // POST /api/users  -> Admin crea un usuario nuevo (username y contraseña se generan solos)
 router.post('/', requireAuth, requireRole('ADMIN'), async (req, res) => {
   const { firstName, lastName, email, role, cargo, areaIds = [], managerId } = req.body;
