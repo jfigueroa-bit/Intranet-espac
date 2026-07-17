@@ -73,16 +73,43 @@ model User {
   notifications Notification[]
   announcements Announcement[]
   events        CalendarEvent[]
+  announcementLikes    AnnouncementLike[]
+  announcementComments AnnouncementComment[]
 }
 
 model Announcement {
   id        Int      @id @default(autoincrement())
   title     String
   content   String
+  imageData String?  @db.Text // imagen del anuncio, guardada como base64
   pinned    Boolean  @default(false)
   authorId  Int
   author    User     @relation(fields: [authorId], references: [id])
   createdAt DateTime @default(now())
+
+  likes    AnnouncementLike[]
+  comments AnnouncementComment[]
+}
+
+model AnnouncementLike {
+  id             Int          @id @default(autoincrement())
+  announcementId Int
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  userId         Int
+  user           User         @relation(fields: [userId], references: [id])
+  createdAt      DateTime     @default(now())
+
+  @@unique([announcementId, userId])
+}
+
+model AnnouncementComment {
+  id             Int          @id @default(autoincrement())
+  announcementId Int
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  authorId       Int
+  author         User         @relation(fields: [authorId], references: [id])
+  content        String
+  createdAt      DateTime     @default(now())
 }
 
 model CalendarEvent {
