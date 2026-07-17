@@ -6,6 +6,14 @@ const router = express.Router();
 
 const AUTOR_INFO = { id: true, firstName: true, lastName: true };
 
+// Convierte "YYYY-MM-DD" a mediodía UTC de ESE mismo día, para que no importa
+// en qué zona horaria esté el navegador o el servidor, el día guardado sea
+// siempre el que la persona eligió (evita el error de "se guarda un día antes").
+function fechaSoloDia(texto) {
+  const [y, m, d] = texto.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+}
+
 // GET /api/events -> todos los eventos del calendario (cualquier usuario los ve)
 router.get('/', requireAuth, async (req, res) => {
   const eventos = await prisma.calendarEvent.findMany({
@@ -26,7 +34,7 @@ router.post('/', requireAuth, async (req, res) => {
     data: {
       title: title.trim(),
       description: description?.trim() || null,
-      date: new Date(date),
+      date: fechaSoloDia(date),
       color: color || '#1c2b4a',
       createdById: req.user.id,
     },
