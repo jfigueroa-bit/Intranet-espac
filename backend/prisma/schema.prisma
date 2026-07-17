@@ -57,6 +57,7 @@ model User {
   mustChangePassword  Boolean    @default(true)
   role                Role       @default(EMPLEADO)
   cargo               String?    // puesto (ej: "Asesora de Ventas")
+  signatureData       String?    @db.Text // firma digital guardada (imagen en base64)
   schedule            Json       @default("[]") // horario semanal: [{ day, active, start, end }]
   scheduleNote        String?    // nota adicional opcional (ej: "Turno rotativo cada 2 semanas")
   workStatus          WorkStatus @default(PRESENCIAL)
@@ -78,6 +79,7 @@ model User {
   announcementComments AnnouncementComment[]
   documentosPersonales Document[] @relation("DocumentosPersonales")
   documentosSubidos    Document[] @relation("DocumentosSubidos")
+  plantillasCreadas    DocumentTemplate[]
 }
 
 model Announcement {
@@ -175,4 +177,14 @@ model Document {
   uploadedById   Int
   uploadedBy     User          @relation("DocumentosSubidos", fields: [uploadedById], references: [id])
   createdAt      DateTime      @default(now())
+}
+
+model DocumentTemplate {
+  id          Int      @id @default(autoincrement())
+  name        String   // ej: "Acta de préstamo de equipo", "Constancia de trabajo"
+  intro       String   @db.Text // texto libre; admite {{persona}}, {{cargo}}, {{fecha}}, {{firmante2}}, {{firmante2Cargo}}
+  fields      Json     @default("[]") // campos personalizados: [{ key, label, placeholder }]
+  createdById Int
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
 }
