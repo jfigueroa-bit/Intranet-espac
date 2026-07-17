@@ -8,9 +8,14 @@ const ROLE_LABEL = {
   MARKETING: 'Marketing', VENTAS: 'Ventas', INSTRUCTOR: 'Instructor', EMPLEADO: 'Colaborador',
 };
 
+const MAX_FIRMA_MB = 1;
+
 export default function MiPerfil() {
   const [perfil, setPerfil] = useState(null);
   const [cargando, setCargando] = useState(false);
+  const [firmaPreview, setFirmaPreview] = useState(null);
+  const [guardandoFirma, setGuardandoFirma] = useState(false);
+  const [errorFirma, setErrorFirma] = useState('');
 
   useEffect(() => { cargar(); }, []);
 
@@ -26,6 +31,31 @@ export default function MiPerfil() {
       await cargar();
     } finally {
       setCargando(false);
+    }
+  }
+
+  function elegirFirma(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > MAX_FIRMA_MB * 1024 * 1024) {
+      setErrorFirma(`La imagen no puede pesar más de ${MAX_FIRMA_MB}MB`);
+      return;
+    }
+    setErrorFirma('');
+    const reader = new FileReader();
+    reader.onload = () => setFirmaPreview(reader.result);
+    reader.readAsDataURL(file);
+  }
+
+  async function guardarFirma() {
+    if (!firmaPreview) return;
+    setGuardandoFirma(true);
+    try {
+      await api.patch('/auth/firma', { signatureData: firmaPreview });
+      setFirmaPreview(null);
+      await cargar();
+    } finally {
+      setGuardandoFirma(false);
     }
   }
 
@@ -105,6 +135,35 @@ export default function MiPerfil() {
         )}
         {perfil.scheduleNote && (
           <div style={{ marginTop: 10, fontSize: 13, color: 'var(--text-muted)' }}>{perfil.scheduleNote}</div>
+        )}
+      </div>
+
+      <div className="card" style={{ marginTop: 16 }}>
+        <label style={campoLabel}>Mi firma digital</label>
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+          Sube una foto o escaneo de tu firma una sola vez. Queda guardada para poder usarse
+          automáticamente cuando alguien genere un documento (como un acta de préstamo) y te
+          seleccione como firmante.
+        </p>
+
+        {perfil.signatureData && !firmaPreview && (
+          <div style={{ marginBottom: 10 }}>
+            <img src={perfil.signatureData} alt="Mi firma" style={{ maxHeight: 80, background: '#fafafa', border: '1px solid var(--border)', borderRadius: 8, padding: 6 }} />
+          </div>
+        )}
+
+        <input type="file" accept="image/*" onChange={elegirFirma} />
+        {firmaPreview && (
+          <div style={{ marginTop: 10 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Vista previa:</div>
+            <img src={firmaPreview} alt="Vista previa de firma" style={{ maxHeight: 80, background: '#fafafa', border: '1px solid var(--border)', borderRadius: 8, padding: 6 }} />
+          </div>
+        )}
+        {errorFirma && <div className="error-text">{errorFirma}</div>}
+        {firmaPreview && (
+          <button className="btn" style={{ marginTop: 10 }} onClick={guardarFirma} disabled={guardandoFirma}>
+            {guardandoFirma ? 'Guardando...' : 'Guardar firma'}
+          </button>
         )}
       </div>
     </div>
