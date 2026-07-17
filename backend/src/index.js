@@ -14,6 +14,7 @@ const announcementsRoutes = require('./routes/announcements');
 const eventsRoutes = require('./routes/events');
 const documentTypesRoutes = require('./routes/documentTypes');
 const documentsRoutes = require('./routes/documents');
+const documentTemplatesRoutes = require('./routes/documentTemplates');
 const { setIO, salaDeUsuario } = require('./utils/socket');
 
 const app = express();
@@ -34,6 +35,7 @@ app.use('/api/announcements', announcementsRoutes);
 app.use('/api/events', eventsRoutes);
 app.use('/api/document-types', documentTypesRoutes);
 app.use('/api/documents', documentsRoutes);
+app.use('/api/document-templates', documentTemplatesRoutes);
 
 // Manejador de errores general: si una ruta falla sin haberlo previsto,
 // devolvemos un mensaje claro en vez de que el navegador reciba una
