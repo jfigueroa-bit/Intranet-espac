@@ -12,6 +12,8 @@ const areasRoutes = require('./routes/areas');
 const notificationsRoutes = require('./routes/notifications');
 const announcementsRoutes = require('./routes/announcements');
 const eventsRoutes = require('./routes/events');
+const documentTypesRoutes = require('./routes/documentTypes');
+const documentsRoutes = require('./routes/documents');
 const { setIO, salaDeUsuario } = require('./utils/socket');
 
 const app = express();
@@ -20,7 +22,7 @@ const server = http.createServer(app);
 const FRONTEND_URL = process.env.FRONTEND_URL || '*';
 
 app.use(cors({ origin: FRONTEND_URL }));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '15mb' }));
 
 app.get('/api/health', (req, res) => res.json({ ok: true, service: 'intranet-espac-backend' }));
 
@@ -30,6 +32,8 @@ app.use('/api/areas', areasRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/announcements', announcementsRoutes);
 app.use('/api/events', eventsRoutes);
+app.use('/api/document-types', documentTypesRoutes);
+app.use('/api/documents', documentsRoutes);
 
 // Manejador de errores general: si una ruta falla sin haberlo previsto,
 // devolvemos un mensaje claro en vez de que el navegador reciba una
