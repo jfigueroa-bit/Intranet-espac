@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { PLANTILLAS } from '../utils/plantillas';
 
 const MAX_DOC_MB = 5;
-const PUEDE_GESTIONAR = ['ADMIN', 'RRHH'];
 
 export default function Documentos() {
   const { user } = useAuth();
   const esAdmin = user?.role === 'ADMIN';
-  const puedeGestionar = PUEDE_GESTIONAR.includes(user?.role);
+  const esRRHH = user?.role === 'RRHH';
 
   const [tab, setTab] = useState('general');
   const [tipos, setTipos] = useState([]);
@@ -24,6 +24,18 @@ export default function Documentos() {
   const [error, setError] = useState('');
   const [subiendo, setSubiendo] = useState(false);
 
+  // --- "Crear documento" (formulario/plantilla) ---
+  const [plantillaId, setPlantillaId] = useState(PLANTILLAS[0].id);
+  const [formPlantilla, setFormPlantilla] = useState({ ownerId: '', fecha: new Date().toISOString().slice(0, 10), documentTypeId: '', campos: {} });
+  const [generando, setGenerando] = useState(false);
+
+  const esJefe = usuarios.some((u) => u.managerId === user?.id);
+  const puedeGestionar = esAdmin || esRRHH || esJefe;
+
+  // A quién puede ver/subir documentos personales: Admin y RRHH a cualquiera,
+  // un jefe de área solo a su propia gente (sus reportes directos).
+  const personasDisponibles = esAdmin || esRRHH ? usuarios : usuarios.filter((u) => u.managerId === user?.id);
+
   useEffect(() => {
     cargarBase();
   }, []);
@@ -33,18 +45,16 @@ export default function Documentos() {
   }, [tab, usuarioPersonalId]);
 
   async function cargarBase() {
-    const [t, a, g] = await Promise.all([
+    const [t, a, g, u] = await Promise.all([
       api.get('/document-types'),
       api.get('/areas'),
       api.get('/documents', { params: { scope: 'GENERAL' } }),
+      api.get('/users'),
     ]);
     setTipos(t.data);
     setAreas(a.data);
     setGenerales(g.data);
-    if (puedeGestionar) {
-      const u = await api.get('/users');
-      setUsuarios(u.data);
-    }
+    setUsuarios(u.data);
   }
 
   async function cargarPersonales(userId) {
@@ -113,12 +123,18 @@ export default function Documentos() {
     }
   }
 
-  async function descargar(doc) {
+  async function abrirDocumento(doc) {
     const { data } = await api.get(`/documents/${doc.id}/descargar`);
-    const a = document.createElement('a');
-    a.href = data.fileData;
-    a.download = data.fileName;
-    a.click();
+    if (data.mimeType === 'text/html') {
+      const ventana = window.open('', '_blank');
+      ventana.document.write(decodeURIComponent(data.fileData.split(',')[1]));
+      ventana.document.close();
+    } else {
+      const a = document.createElement('a');
+      a.href = data.fileData;
+      a.download = data.fileName;
+      a.click();
+    }
   }
 
   async function eliminarDoc(id, esPersonal) {
@@ -149,17 +165,68 @@ export default function Documentos() {
     cargarBase();
   }
 
+  const plantilla = PLANTILLAS.find((p) => p.id === plantillaId);
+
+  function actualizarCampoPlantilla(key, value) {
+    setFormPlantilla((f) => ({ ...f, campos: { ...f.campos, [key]: value } }));
+  }
+
+  async function generarDocumento(e) {
+    e.preventDefault();
+    setError('');
+    if (!formPlantilla.ownerId) { setError('Elige a quién pertenece este documento'); return; }
+    setGenerando(true);
+    try {
+      const empleado = usuarios.find((u) => u.id === Number(formPlantilla.ownerId));
+      const html = plantilla.generar({
+        empleadoNombre: `${empleado.firstName} ${empleado.lastName}`,
+        empleadoCargo: empleado.cargo,
+        entregadoPorNombre: `${user.firstName} ${user.lastName}`,
+        fecha: formPlantilla.fecha,
+        campos: formPlantilla.campos,
+      });
+      const fileData = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
+
+      await api.post('/documents', {
+        title: `${plantilla.nombre} — ${empleado.firstName} ${empleado.lastName}`,
+        fileName: `${plantilla.nombre.replace(/\s+/g, '-')}-${empleado.firstName}-${formPlantilla.fecha}.html`,
+        mimeType: 'text/html',
+        fileData,
+        scope: 'PERSONAL',
+        documentTypeId: formPlantilla.documentTypeId || null,
+        ownerId: formPlantilla.ownerId,
+      });
+
+      // Abrimos el documento recién generado para verlo/imprimirlo de una vez
+      const ventana = window.open('', '_blank');
+      ventana.document.write(html);
+      ventana.document.close();
+
+      setFormPlantilla({ ownerId: '', fecha: new Date().toISOString().slice(0, 10), documentTypeId: '', campos: {} });
+      if (Number(formPlantilla.ownerId) === Number(usuarioPersonalId)) cargarPersonales(usuarioPersonalId);
+    } catch (err) {
+      setError(err.response?.data?.error || 'No se pudo generar el documento');
+    } finally {
+      setGenerando(false);
+    }
+  }
+
   return (
     <div style={{ maxWidth: 780 }}>
       <h2 style={{ marginTop: 0 }}>Documentos</h2>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
         <button className={`btn ${tab === 'general' ? '' : 'secondary'}`} style={{ padding: '6px 16px', fontSize: 13 }} onClick={() => setTab('general')}>
           Documentos generales
         </button>
         <button className={`btn ${tab === 'personal' ? '' : 'secondary'}`} style={{ padding: '6px 16px', fontSize: 13 }} onClick={() => setTab('personal')}>
           Mis documentos
         </button>
+        {puedeGestionar && (
+          <button className={`btn ${tab === 'crear' ? '' : 'secondary'}`} style={{ padding: '6px 16px', fontSize: 13 }} onClick={() => setTab('crear')}>
+            Crear documento
+          </button>
+        )}
         {esAdmin && (
           <button className={`btn ${tab === 'tipos' ? '' : 'secondary'}`} style={{ padding: '6px 16px', fontSize: 13 }} onClick={() => setTab('tipos')}>
             Tipos y permisos
@@ -204,7 +271,7 @@ export default function Documentos() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
-                  <button className="btn secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => descargar(d)}>Descargar</button>
+                  <button className="btn secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => abrirDocumento(d)}>Ver / Descargar</button>
                   {(esAdmin || d.uploadedBy.id === user?.id) && (
                     <button className="btn danger" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => eliminarDoc(d.id, false)}>Eliminar</button>
                   )}
@@ -223,7 +290,7 @@ export default function Documentos() {
               <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>Viendo la carpeta de:</label>
               <select value={usuarioPersonalId} onChange={(e) => setUsuarioPersonalId(Number(e.target.value))} style={{ marginTop: 6 }}>
                 <option value={user.id}>Yo ({user.firstName} {user.lastName})</option>
-                {usuarios.filter((u) => u.id !== user.id).map((u) => (
+                {personasDisponibles.filter((u) => u.id !== user.id).map((u) => (
                   <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>
                 ))}
               </select>
@@ -237,7 +304,7 @@ export default function Documentos() {
                 <label>¿Para quién es?</label>
                 <select value={formPersonal.ownerId} onChange={(e) => setFormPersonal({ ...formPersonal, ownerId: e.target.value })} required>
                   <option value="">Selecciona a la persona</option>
-                  {usuarios.map((u) => <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>)}
+                  {personasDisponibles.map((u) => <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>)}
                 </select>
               </div>
               <div className="field">
@@ -270,8 +337,8 @@ export default function Documentos() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
-                  <button className="btn secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => descargar(d)}>Descargar</button>
-                  {esAdmin && (
+                  <button className="btn secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => abrirDocumento(d)}>Ver / Descargar</button>
+                  {(esAdmin || d.uploadedBy.id === user?.id) && (
                     <button className="btn danger" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => eliminarDoc(d.id, true)}>Eliminar</button>
                   )}
                 </div>
@@ -280,6 +347,57 @@ export default function Documentos() {
             {personales.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No hay documentos personales aquí todavía.</div>}
           </div>
         </div>
+      )}
+
+      {tab === 'crear' && puedeGestionar && (
+        <form onSubmit={generarDocumento} className="card">
+          <h3 style={{ marginTop: 0 }}>Crear documento desde formulario</h3>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+            Se genera un documento con formato listo para imprimir o guardar como PDF, y queda guardado
+            en la carpeta personal de la persona que elijas.
+          </p>
+
+          <div className="field">
+            <label>Tipo de formulario</label>
+            <select value={plantillaId} onChange={(e) => { setPlantillaId(e.target.value); setFormPlantilla((f) => ({ ...f, campos: {} })); }}>
+              {PLANTILLAS.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+            </select>
+          </div>
+
+          <div className="field">
+            <label>¿Para quién es?</label>
+            <select value={formPlantilla.ownerId} onChange={(e) => setFormPlantilla({ ...formPlantilla, ownerId: e.target.value })} required>
+              <option value="">Selecciona a la persona</option>
+              {personasDisponibles.map((u) => <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>)}
+            </select>
+          </div>
+
+          <div className="field">
+            <label>Fecha</label>
+            <input type="date" value={formPlantilla.fecha} onChange={(e) => setFormPlantilla({ ...formPlantilla, fecha: e.target.value })} required />
+          </div>
+
+          {plantilla.campos.map((c) => (
+            <div className="field" key={c.key}>
+              <label>{c.label}</label>
+              <input
+                value={formPlantilla.campos[c.key] || ''}
+                onChange={(e) => actualizarCampoPlantilla(c.key, e.target.value)}
+                placeholder={c.placeholder}
+              />
+            </div>
+          ))}
+
+          <div className="field">
+            <label>Tipo de documento para clasificarlo (opcional)</label>
+            <select value={formPlantilla.documentTypeId} onChange={(e) => setFormPlantilla({ ...formPlantilla, documentTypeId: e.target.value })}>
+              <option value="">Sin tipo</option>
+              {tipos.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          </div>
+
+          <button className="btn" disabled={generando}>{generando ? 'Generando...' : 'Generar documento'}</button>
+        </form>
       )}
 
       {tab === 'tipos' && esAdmin && (
