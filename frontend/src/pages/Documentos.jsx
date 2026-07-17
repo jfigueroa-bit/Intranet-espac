@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { PLANTILLAS } from '../utils/plantillas';
+import { construirDocumentoHTML, reemplazarTokens, slugify } from '../utils/documentoHTML';
 
 const MAX_DOC_MB = 5;
 
@@ -24,16 +24,21 @@ export default function Documentos() {
   const [error, setError] = useState('');
   const [subiendo, setSubiendo] = useState(false);
 
-  // --- "Crear documento" (formulario/plantilla) ---
-  const [plantillaId, setPlantillaId] = useState(PLANTILLAS[0].id);
-  const [formPlantilla, setFormPlantilla] = useState({ ownerId: '', fecha: new Date().toISOString().slice(0, 10), documentTypeId: '', campos: {} });
+  // --- "Crear documento": plantillas guardadas + generación con 2 firmantes ---
+  const [plantillas, setPlantillas] = useState([]);
+  const [subVistaCrear, setSubVistaCrear] = useState('generar'); // 'generar' | 'nueva'
+  const [plantillaId, setPlantillaId] = useState('');
+  const [formGenerar, setFormGenerar] = useState({ ownerId: '', firmante2Id: '', fecha: new Date().toISOString().slice(0, 10), documentTypeId: '', valores: {} });
   const [generando, setGenerando] = useState(false);
+  const [nuevaPlantilla, setNuevaPlantilla] = useState({ name: '', intro: '', campos: [] });
+  const [nuevoCampoLabel, setNuevoCampoLabel] = useState('');
+  const [guardandoPlantilla, setGuardandoPlantilla] = useState(false);
 
   const esJefe = usuarios.some((u) => u.managerId === user?.id);
   const puedeGestionar = esAdmin || esRRHH || esJefe;
 
-  // A quién puede ver/subir documentos personales: Admin y RRHH a cualquiera,
-  // un jefe de área solo a su propia gente (sus reportes directos).
+  // A quién puede ver/subir documentos personales (persona principal del documento):
+  // Admin y RRHH a cualquiera, un jefe de área solo a su propia gente.
   const personasDisponibles = esAdmin || esRRHH ? usuarios : usuarios.filter((u) => u.managerId === user?.id);
 
   useEffect(() => {
@@ -55,6 +60,12 @@ export default function Documentos() {
     setAreas(a.data);
     setGenerales(g.data);
     setUsuarios(u.data);
+    try {
+      const p = await api.get('/document-templates');
+      setPlantillas(p.data);
+    } catch {
+      setPlantillas([]);
+    }
   }
 
   async function cargarPersonales(userId) {
@@ -165,45 +176,116 @@ export default function Documentos() {
     cargarBase();
   }
 
-  const plantilla = PLANTILLAS.find((p) => p.id === plantillaId);
+  // --- Nueva plantilla ---
+  function agregarCampo() {
+    if (!nuevoCampoLabel.trim()) return;
+    const key = slugify(nuevoCampoLabel) || `campo_${nuevaPlantilla.campos.length + 1}`;
+    setNuevaPlantilla((p) => ({ ...p, campos: [...p.campos, { key, label: nuevoCampoLabel.trim() }] }));
+    setNuevoCampoLabel('');
+  }
 
-  function actualizarCampoPlantilla(key, value) {
-    setFormPlantilla((f) => ({ ...f, campos: { ...f.campos, [key]: value } }));
+  function quitarCampo(key) {
+    setNuevaPlantilla((p) => ({ ...p, campos: p.campos.filter((c) => c.key !== key) }));
+  }
+
+  async function guardarPlantilla(e) {
+    e.preventDefault();
+    setError('');
+    if (!nuevaPlantilla.name.trim() || !nuevaPlantilla.intro.trim()) {
+      setError('El nombre y el texto de la plantilla son obligatorios');
+      return;
+    }
+    setGuardandoPlantilla(true);
+    try {
+      const { data } = await api.post('/document-templates', nuevaPlantilla);
+      setPlantillas((p) => [...p, data]);
+      setNuevaPlantilla({ name: '', intro: '', campos: [] });
+      setPlantillaId(data.id);
+      setSubVistaCrear('generar');
+    } catch (err) {
+      setError(err.response?.data?.error || 'No se pudo guardar la plantilla');
+    } finally {
+      setGuardandoPlantilla(false);
+    }
+  }
+
+  async function eliminarPlantilla(id) {
+    if (!confirm('¿Eliminar esta plantilla? No se borran los documentos ya generados con ella.')) return;
+    await api.delete(`/document-templates/${id}`);
+    setPlantillas((p) => p.filter((pl) => pl.id !== id));
+    if (Number(plantillaId) === id) setPlantillaId('');
+  }
+
+  // --- Generar documento a partir de una plantilla ---
+  const plantilla = plantillas.find((p) => p.id === Number(plantillaId));
+
+  function actualizarValorCampo(key, value) {
+    setFormGenerar((f) => ({ ...f, valores: { ...f.valores, [key]: value } }));
+  }
+
+  async function obtenerFirma(userId) {
+    try {
+      const { data } = await api.get(`/users/${userId}/firma`);
+      return data.signatureData;
+    } catch {
+      return null;
+    }
   }
 
   async function generarDocumento(e) {
     e.preventDefault();
     setError('');
-    if (!formPlantilla.ownerId) { setError('Elige a quién pertenece este documento'); return; }
+    if (!plantilla) { setError('Elige una plantilla'); return; }
+    if (!formGenerar.ownerId) { setError('Elige a quién pertenece este documento'); return; }
     setGenerando(true);
     try {
-      const empleado = usuarios.find((u) => u.id === Number(formPlantilla.ownerId));
-      const html = plantilla.generar({
-        empleadoNombre: `${empleado.firstName} ${empleado.lastName}`,
-        empleadoCargo: empleado.cargo,
-        entregadoPorNombre: `${user.firstName} ${user.lastName}`,
-        fecha: formPlantilla.fecha,
-        campos: formPlantilla.campos,
+      const principal = usuarios.find((u) => u.id === Number(formGenerar.ownerId));
+      const segundo = formGenerar.firmante2Id ? usuarios.find((u) => u.id === Number(formGenerar.firmante2Id)) : null;
+
+      const [firma1, firma2] = await Promise.all([
+        obtenerFirma(principal.id),
+        segundo ? obtenerFirma(segundo.id) : Promise.resolve(null),
+      ]);
+
+      const fechaTexto = new Date(formGenerar.fecha + 'T00:00:00').toLocaleDateString('es-PE', { day: 'numeric', month: 'long', year: 'numeric' });
+
+      const introTexto = reemplazarTokens(plantilla.intro, {
+        persona: `${principal.firstName} ${principal.lastName}`,
+        cargo: principal.cargo || '',
+        fecha: fechaTexto,
+        firmante2: segundo ? `${segundo.firstName} ${segundo.lastName}` : '',
+        firmante2Cargo: segundo?.cargo || '',
       });
+
+      const camposTabla = (plantilla.fields || []).map((c) => ({ label: c.label, value: formGenerar.valores[c.key] || '' }));
+
+      const html = construirDocumentoHTML({
+        nombrePlantilla: plantilla.name,
+        introTexto,
+        camposTabla,
+        firmante1: { nombre: `${principal.firstName} ${principal.lastName}`, cargo: principal.cargo, firma: firma1 },
+        firmante2: segundo ? { nombre: `${segundo.firstName} ${segundo.lastName}`, cargo: segundo.cargo, firma: firma2 } : null,
+      });
+
       const fileData = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
 
       await api.post('/documents', {
-        title: `${plantilla.nombre} — ${empleado.firstName} ${empleado.lastName}`,
-        fileName: `${plantilla.nombre.replace(/\s+/g, '-')}-${empleado.firstName}-${formPlantilla.fecha}.html`,
+        title: `${plantilla.name} — ${principal.firstName} ${principal.lastName}`,
+        fileName: `${plantilla.name.replace(/\s+/g, '-')}-${principal.firstName}-${formGenerar.fecha}.html`,
         mimeType: 'text/html',
         fileData,
         scope: 'PERSONAL',
-        documentTypeId: formPlantilla.documentTypeId || null,
-        ownerId: formPlantilla.ownerId,
+        documentTypeId: formGenerar.documentTypeId || null,
+        ownerId: formGenerar.ownerId,
       });
 
-      // Abrimos el documento recién generado para verlo/imprimirlo de una vez
       const ventana = window.open('', '_blank');
       ventana.document.write(html);
       ventana.document.close();
 
-      setFormPlantilla({ ownerId: '', fecha: new Date().toISOString().slice(0, 10), documentTypeId: '', campos: {} });
-      if (Number(formPlantilla.ownerId) === Number(usuarioPersonalId)) cargarPersonales(usuarioPersonalId);
+      const ownerAnterior = formGenerar.ownerId;
+      setFormGenerar({ ownerId: '', firmante2Id: '', fecha: new Date().toISOString().slice(0, 10), documentTypeId: '', valores: {} });
+      if (Number(ownerAnterior) === Number(usuarioPersonalId)) cargarPersonales(usuarioPersonalId);
     } catch (err) {
       setError(err.response?.data?.error || 'No se pudo generar el documento');
     } finally {
@@ -350,54 +432,134 @@ export default function Documentos() {
       )}
 
       {tab === 'crear' && puedeGestionar && (
-        <form onSubmit={generarDocumento} className="card">
-          <h3 style={{ marginTop: 0 }}>Crear documento desde formulario</h3>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-            Se genera un documento con formato listo para imprimir o guardar como PDF, y queda guardado
-            en la carpeta personal de la persona que elijas.
-          </p>
-
-          <div className="field">
-            <label>Tipo de formulario</label>
-            <select value={plantillaId} onChange={(e) => { setPlantillaId(e.target.value); setFormPlantilla((f) => ({ ...f, campos: {} })); }}>
-              {PLANTILLAS.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-            </select>
+        <div>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+            <button className={`btn ${subVistaCrear === 'generar' ? '' : 'secondary'}`} style={{ padding: '5px 14px', fontSize: 12 }} onClick={() => setSubVistaCrear('generar')}>
+              Generar documento
+            </button>
+            <button className={`btn ${subVistaCrear === 'nueva' ? '' : 'secondary'}`} style={{ padding: '5px 14px', fontSize: 12 }} onClick={() => setSubVistaCrear('nueva')}>
+              + Nueva plantilla
+            </button>
           </div>
 
-          <div className="field">
-            <label>¿Para quién es?</label>
-            <select value={formPlantilla.ownerId} onChange={(e) => setFormPlantilla({ ...formPlantilla, ownerId: e.target.value })} required>
-              <option value="">Selecciona a la persona</option>
-              {personasDisponibles.map((u) => <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>)}
-            </select>
-          </div>
+          {subVistaCrear === 'nueva' && (
+            <form onSubmit={guardarPlantilla} className="card">
+              <h3 style={{ marginTop: 0 }}>Crear una plantilla nueva</h3>
+              <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                Escribe el texto del documento. Puedes usar estas palabras especiales y se
+                reemplazan solas cuando se genere: <code>{'{{persona}}'}</code>, <code>{'{{cargo}}'}</code>,{' '}
+                <code>{'{{fecha}}'}</code>, <code>{'{{firmante2}}'}</code>, <code>{'{{firmante2Cargo}}'}</code>.
+              </p>
+              <div className="field">
+                <label>Nombre de la plantilla</label>
+                <input value={nuevaPlantilla.name} onChange={(e) => setNuevaPlantilla({ ...nuevaPlantilla, name: e.target.value })} placeholder="Ej: Constancia de trabajo" required />
+              </div>
+              <div className="field">
+                <label>Texto del documento</label>
+                <textarea
+                  value={nuevaPlantilla.intro}
+                  onChange={(e) => setNuevaPlantilla({ ...nuevaPlantilla, intro: e.target.value })}
+                  rows={6}
+                  placeholder={'Ej: Por medio del presente se hace constancia de la entrega a {{persona}} ({{cargo}}), con fecha {{fecha}}...'}
+                  style={{ resize: 'vertical' }}
+                  required
+                />
+              </div>
 
-          <div className="field">
-            <label>Fecha</label>
-            <input type="date" value={formPlantilla.fecha} onChange={(e) => setFormPlantilla({ ...formPlantilla, fecha: e.target.value })} required />
-          </div>
+              <div className="field">
+                <label>Campos adicionales (opcional)</label>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 0 }}>
+                  Ej: para un acta de préstamo podrías agregar "Equipo entregado" y "Condiciones".
+                  Estos aparecen como una tabla al final del documento.
+                </p>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                  <input value={nuevoCampoLabel} onChange={(e) => setNuevoCampoLabel(e.target.value)} placeholder="Ej: Equipo entregado" />
+                  <button type="button" className="btn secondary" onClick={agregarCampo}>+ Agregar campo</button>
+                </div>
+                {nuevaPlantilla.campos.map((c) => (
+                  <div key={c.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', fontSize: 13 }}>
+                    <span>{c.label}</span>
+                    <button type="button" onClick={() => quitarCampo(c.key)} style={{ background: 'none', border: 'none', color: 'var(--danger)', fontSize: 12 }}>Quitar</button>
+                  </div>
+                ))}
+              </div>
 
-          {plantilla.campos.map((c) => (
-            <div className="field" key={c.key}>
-              <label>{c.label}</label>
-              <input
-                value={formPlantilla.campos[c.key] || ''}
-                onChange={(e) => actualizarCampoPlantilla(c.key, e.target.value)}
-                placeholder={c.placeholder}
-              />
-            </div>
-          ))}
+              <button className="btn" disabled={guardandoPlantilla}>{guardandoPlantilla ? 'Guardando...' : 'Guardar plantilla'}</button>
+            </form>
+          )}
 
-          <div className="field">
-            <label>Tipo de documento para clasificarlo (opcional)</label>
-            <select value={formPlantilla.documentTypeId} onChange={(e) => setFormPlantilla({ ...formPlantilla, documentTypeId: e.target.value })}>
-              <option value="">Sin tipo</option>
-              {tipos.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
-          </div>
+          {subVistaCrear === 'generar' && (
+            <>
+              {plantillas.length === 0 ? (
+                <div className="card" style={{ color: 'var(--text-muted)', fontSize: 14 }}>
+                  Todavía no hay ninguna plantilla creada. Ve a "+ Nueva plantilla" para crear la primera
+                  (por ejemplo, un acta de préstamo de equipo).
+                </div>
+              ) : (
+                <form onSubmit={generarDocumento} className="card">
+                  <h3 style={{ marginTop: 0 }}>Generar documento</h3>
 
-          <button className="btn" disabled={generando}>{generando ? 'Generando...' : 'Generar documento'}</button>
-        </form>
+                  <div className="field">
+                    <label>Plantilla</label>
+                    <select value={plantillaId} onChange={(e) => { setPlantillaId(e.target.value); setFormGenerar((f) => ({ ...f, valores: {} })); }} required>
+                      <option value="">Selecciona una plantilla</option>
+                      {plantillas.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                    {plantilla && (esAdmin || plantilla.createdById === user?.id) && (
+                      <button type="button" onClick={() => eliminarPlantilla(plantilla.id)} style={{ marginTop: 6, background: 'none', border: 'none', color: 'var(--danger)', fontSize: 12 }}>
+                        Eliminar esta plantilla
+                      </button>
+                    )}
+                  </div>
+
+                  {plantilla && (
+                    <>
+                      <div className="field">
+                        <label>Persona principal (para quién es el documento)</label>
+                        <select value={formGenerar.ownerId} onChange={(e) => setFormGenerar({ ...formGenerar, ownerId: e.target.value })} required>
+                          <option value="">Selecciona a la persona</option>
+                          {personasDisponibles.map((u) => <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>)}
+                        </select>
+                      </div>
+
+                      <div className="field">
+                        <label>Segundo firmante (opcional — ej. jefa de RRHH)</label>
+                        <select value={formGenerar.firmante2Id} onChange={(e) => setFormGenerar({ ...formGenerar, firmante2Id: e.target.value })}>
+                          <option value="">Sin segundo firmante</option>
+                          {usuarios.filter((u) => u.id !== Number(formGenerar.ownerId)).map((u) => (
+                            <option key={u.id} value={u.id}>{u.firstName} {u.lastName}{u.cargo ? ` — ${u.cargo}` : ''}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="field">
+                        <label>Fecha</label>
+                        <input type="date" value={formGenerar.fecha} onChange={(e) => setFormGenerar({ ...formGenerar, fecha: e.target.value })} required />
+                      </div>
+
+                      {(plantilla.fields || []).map((c) => (
+                        <div className="field" key={c.key}>
+                          <label>{c.label}</label>
+                          <input value={formGenerar.valores[c.key] || ''} onChange={(e) => actualizarValorCampo(c.key, e.target.value)} />
+                        </div>
+                      ))}
+
+                      <div className="field">
+                        <label>Tipo de documento para clasificarlo (opcional)</label>
+                        <select value={formGenerar.documentTypeId} onChange={(e) => setFormGenerar({ ...formGenerar, documentTypeId: e.target.value })}>
+                          <option value="">Sin tipo</option>
+                          {tipos.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                        </select>
+                      </div>
+
+                      <button className="btn" disabled={generando}>{generando ? 'Generando...' : 'Generar documento'}</button>
+                    </>
+                  )}
+                </form>
+              )}
+            </>
+          )}
+        </div>
       )}
 
       {tab === 'tipos' && esAdmin && (
