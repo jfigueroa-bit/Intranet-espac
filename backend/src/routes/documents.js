@@ -1,11 +1,11 @@
 const express = require('express');
 const prisma = require('../lib/prisma');
 const { requireAuth } = require('../middleware/auth');
-const { requireRole } = require('../middleware/roles');
+const { requireGestorDocumentos } = require('../middleware/documentPermissions');
 
 const router = express.Router();
 
-const AUTOR_INFO = { id: true, firstName: true, lastName: true, cargo: true };
+const AUTOR_INFO = { id: true, firstName: true, lastName: true, cargo: true, managerId: true };
 
 const INCLUIR = {
   documentType: { include: { permissions: true } },
@@ -14,7 +14,7 @@ const INCLUIR = {
 };
 
 // Quita el archivo pesado (fileData) de la respuesta de listado, para que cargue rápido.
-// El archivo completo solo se manda cuando se pide descargar un documento puntual.
+// El archivo completo solo se manda cuando se pide descargar/ver un documento puntual.
 function sinArchivo(doc) {
   const { fileData, ...resto } = doc;
   return resto;
@@ -32,6 +32,12 @@ function puedeVerTipo(documentType, misAreaIds, esAdmin) {
   return documentType.permissions.some((p) => misAreaIds.includes(p.areaId));
 }
 
+// ¿target es reporte directo de jefeId?
+async function esReporteDirecto(jefeId, targetId) {
+  const persona = await prisma.user.findUnique({ where: { id: targetId }, select: { managerId: true } });
+  return persona?.managerId === jefeId;
+}
+
 // GET /api/documents?scope=GENERAL
 // GET /api/documents?scope=PERSONAL&userId=5  (si no se manda userId, son los propios)
 router.get('/', requireAuth, async (req, res) => {
@@ -42,7 +48,10 @@ router.get('/', requireAuth, async (req, res) => {
   if (scope === 'PERSONAL') {
     const idObjetivo = userId ? Number(userId) : req.user.id;
     if (idObjetivo !== req.user.id && !esAdmin && !esRRHH) {
-      return res.status(403).json({ error: 'No puedes ver los documentos personales de otra persona' });
+      const esSuJefe = await esReporteDirecto(req.user.id, idObjetivo);
+      if (!esSuJefe) {
+        return res.status(403).json({ error: 'No puedes ver los documentos personales de esa persona' });
+      }
     }
     const documentos = await prisma.document.findMany({
       where: { scope: 'PERSONAL', ownerId: idObjetivo },
@@ -74,7 +83,8 @@ router.get('/:id/descargar', requireAuth, async (req, res) => {
 
   if (doc.scope === 'PERSONAL') {
     if (doc.ownerId !== req.user.id && !esAdmin && !esRRHH) {
-      return res.status(403).json({ error: 'No tienes permiso para ver este documento' });
+      const esSuJefe = await esReporteDirecto(req.user.id, doc.ownerId);
+      if (!esSuJefe) return res.status(403).json({ error: 'No tienes permiso para ver este documento' });
     }
   } else {
     const misAreaIds = esAdmin ? [] : await areasDelUsuario(req.user.id);
@@ -86,15 +96,23 @@ router.get('/:id/descargar', requireAuth, async (req, res) => {
   res.json({ fileName: doc.fileName, mimeType: doc.mimeType, fileData: doc.fileData });
 });
 
-// POST /api/documents -> subir un documento nuevo
-// GENERAL: solo Admin o RRHH. PERSONAL: solo Admin o RRHH, indicando ownerId (para quién es).
-router.post('/', requireAuth, requireRole('ADMIN', 'RRHH'), async (req, res) => {
+// POST /api/documents -> subir un documento nuevo (o uno generado desde un formulario/plantilla)
+// GENERAL: Admin, RRHH, o cualquier jefe de área.
+// PERSONAL: Admin y RRHH a cualquiera; un jefe de área SOLO a su gente (sus reportes directos).
+router.post('/', requireAuth, requireGestorDocumentos, async (req, res) => {
   const { title, fileName, mimeType, fileData, scope, documentTypeId, ownerId } = req.body;
   if (!title?.trim() || !fileName || !fileData) {
     return res.status(400).json({ error: 'Faltan datos del documento' });
   }
   if (scope === 'PERSONAL' && !ownerId) {
     return res.status(400).json({ error: 'Debes indicar de quién es este documento personal' });
+  }
+
+  if (scope === 'PERSONAL' && req.esJefeDeArea) {
+    const esSuGente = await esReporteDirecto(req.user.id, Number(ownerId));
+    if (!esSuGente) {
+      return res.status(403).json({ error: 'Solo puedes subir documentos personales a la gente que te reporta directamente' });
+    }
   }
 
   const doc = await prisma.document.create({
@@ -114,8 +132,8 @@ router.post('/', requireAuth, requireRole('ADMIN', 'RRHH'), async (req, res) => 
   res.status(201).json(sinArchivo(doc));
 });
 
-// DELETE /api/documents/:id -> Admin siempre puede; RRHH solo lo que subió ella misma
-router.delete('/:id', requireAuth, requireRole('ADMIN', 'RRHH'), async (req, res) => {
+// DELETE /api/documents/:id -> Admin siempre puede; cualquier otra persona solo lo que subió ella misma
+router.delete('/:id', requireAuth, async (req, res) => {
   const id = Number(req.params.id);
   const doc = await prisma.document.findUnique({ where: { id } });
   if (!doc) return res.status(404).json({ error: 'No encontrado' });
