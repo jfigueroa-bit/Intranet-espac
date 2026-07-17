@@ -4,7 +4,6 @@ import { useAuth } from '../context/AuthContext';
 // Los módulos marcados como "proximo" se agregarán en las siguientes fases
 // del proyecto. Ya están aquí para que se vea la estructura final completa.
 const proximamente = [
-  'Documentos',
   'Vacaciones',
   'Chat interno',
   'Programaciones',
@@ -24,6 +23,7 @@ export default function Sidebar() {
       <NavLink to="/calendario">Calendario</NavLink>
       <NavLink to="/perfil">Mi Perfil</NavLink>
       <NavLink to="/compania">Compañía</NavLink>
+      <NavLink to="/documentos">Documentos</NavLink>
 
       {(user?.role === 'ADMIN' || user?.role === 'RRHH') && (
         <NavLink to="/horarios">Horarios</NavLink>
