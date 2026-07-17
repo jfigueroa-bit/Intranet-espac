@@ -34,6 +34,7 @@ model Area {
   color     String     @default("#1c2b4a") // color del tag, en formato hexadecimal
   createdAt DateTime   @default(now())
   users     UserArea[]
+  documentPermissions DocumentTypeAreaPermission[]
 }
 
 model UserArea {
@@ -75,6 +76,8 @@ model User {
   events        CalendarEvent[]
   announcementLikes    AnnouncementLike[]
   announcementComments AnnouncementComment[]
+  documentosPersonales Document[] @relation("DocumentosPersonales")
+  documentosSubidos    Document[] @relation("DocumentosSubidos")
 }
 
 model Announcement {
@@ -133,4 +136,43 @@ model Notification {
   link      String?
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
+}
+
+enum DocumentScope {
+  GENERAL  // documento oficial, visible para toda la empresa (o solo ciertas áreas)
+  PERSONAL // documento privado de un solo usuario (ej: acta de préstamo, contrato)
+}
+
+model DocumentType {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique // ej: "Contratos", "Actas de préstamo", "Manuales", "Políticas"
+  createdAt   DateTime @default(now())
+  documents   Document[]
+  permissions DocumentTypeAreaPermission[] // si no tiene ninguna, es visible para todas las áreas
+}
+
+model DocumentTypeAreaPermission {
+  id             Int          @id @default(autoincrement())
+  documentTypeId Int
+  documentType   DocumentType @relation(fields: [documentTypeId], references: [id], onDelete: Cascade)
+  areaId         Int
+  area           Area         @relation(fields: [areaId], references: [id], onDelete: Cascade)
+
+  @@unique([documentTypeId, areaId])
+}
+
+model Document {
+  id             Int           @id @default(autoincrement())
+  title          String
+  fileName       String
+  mimeType       String
+  fileData       String        @db.Text // el archivo, guardado como base64
+  scope          DocumentScope
+  documentTypeId Int?
+  documentType   DocumentType? @relation(fields: [documentTypeId], references: [id])
+  ownerId        Int?          // solo para documentos PERSONAL: de quién es
+  owner          User?         @relation("DocumentosPersonales", fields: [ownerId], references: [id])
+  uploadedById   Int
+  uploadedBy     User          @relation("DocumentosSubidos", fields: [uploadedById], references: [id])
+  createdAt      DateTime      @default(now())
 }
