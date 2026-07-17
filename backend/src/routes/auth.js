@@ -79,13 +79,22 @@ router.get('/me', requireAuth, async (req, res) => {
     where: { id: req.user.id },
     select: {
       id: true, username: true, firstName: true, lastName: true, email: true,
-      role: true, cargo: true, schedule: true, scheduleNote: true,
+      role: true, cargo: true, schedule: true, scheduleNote: true, signatureData: true,
       workStatus: true, mustChangePassword: true, vacationDaysTotal: true,
       vacationDaysUsed: true,
       areas: { include: { area: true } },
     },
   });
   res.json(user);
+});
+
+// PATCH /api/auth/firma -> cada quien sube/actualiza SU PROPIA firma digital
+// (una vez guardada, queda lista para usarse al generar documentos)
+router.patch('/firma', requireAuth, async (req, res) => {
+  const { signatureData } = req.body;
+  if (!signatureData) return res.status(400).json({ error: 'Falta la imagen de la firma' });
+  await prisma.user.update({ where: { id: req.user.id }, data: { signatureData } });
+  res.json({ ok: true });
 });
 
 module.exports = router;
