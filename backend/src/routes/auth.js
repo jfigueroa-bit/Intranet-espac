@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const prisma = require('../lib/prisma');
 const { requireAuth } = require('../middleware/auth');
+const { idsDeVacacionesHoy } = require('../utils/vacationStatus');
 
 const router = express.Router();
 
@@ -85,7 +86,8 @@ router.get('/me', requireAuth, async (req, res) => {
       areas: { include: { area: true } },
     },
   });
-  res.json(user);
+  const enVacaciones = await idsDeVacacionesHoy();
+  res.json(enVacaciones.has(user.id) ? { ...user, workStatus: 'VACACIONES' } : user);
 });
 
 // PATCH /api/auth/firma -> cada quien sube/actualiza SU PROPIA firma digital
