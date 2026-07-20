@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { MESES, DIAS_SEMANA, aFechaLocal, generarMes } from '../utils/calendario';
 
 const COLORES = ['#1c2b4a', '#2e7d32', '#c9a227', '#b3261e', '#2952cc', '#7b3fa0'];
+const COLOR_VACACIONES = '#a83279';
 
 export default function Calendario() {
   const { user } = useAuth();
@@ -11,6 +12,7 @@ export default function Calendario() {
   const [year, setYear] = useState(hoy.getFullYear());
   const [month, setMonth] = useState(hoy.getMonth());
   const [eventos, setEventos] = useState([]);
+  const [misVacaciones, setMisVacaciones] = useState([]);
   const [diaSeleccionado, setDiaSeleccionado] = useState(null);
   const [form, setForm] = useState({ title: '', description: '', color: COLORES[0] });
   const [error, setError] = useState('');
@@ -18,8 +20,22 @@ export default function Calendario() {
   useEffect(() => { cargar(); }, []);
 
   async function cargar() {
-    const { data } = await api.get('/events');
-    setEventos(data);
+    const [ev, vac] = await Promise.all([api.get('/events'), api.get('/vacations')]);
+    setEventos(ev.data);
+    setMisVacaciones(vac.data.filter((v) => v.status === 'APROBADA'));
+  }
+
+  // Convierte un rango de fechas de una solicitud aprobada en un día-por-día,
+  // para poder mostrarlo en el calendario igual que un evento normal.
+  function diasEnRango(inicioISO, finISO) {
+    const dias = [];
+    let actual = new Date(inicioISO);
+    const fin = new Date(finISO);
+    while (actual <= fin) {
+      dias.push(aFechaLocal(actual));
+      actual = new Date(actual.getTime() + 24 * 60 * 60 * 1000);
+    }
+    return dias;
   }
 
   const semanas = useMemo(() => generarMes(year, month), [year, month]);
@@ -31,8 +47,14 @@ export default function Calendario() {
       if (!mapa[key]) mapa[key] = [];
       mapa[key].push(ev);
     });
+    misVacaciones.forEach((v) => {
+      diasEnRango(v.startDate, v.endDate).forEach((key) => {
+        if (!mapa[key]) mapa[key] = [];
+        mapa[key].push({ id: `vac-${v.id}-${key}`, title: 'Mis vacaciones', color: COLOR_VACACIONES, virtual: true });
+      });
+    });
     return mapa;
-  }, [eventos]);
+  }, [eventos, misVacaciones]);
 
   const proximos = useMemo(() => {
     const hoyKey = aFechaLocal(new Date());
@@ -119,7 +141,7 @@ export default function Calendario() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 4 }}>
                     {eventosDia.slice(0, 2).map((ev) => (
                       <div key={ev.id} style={{ fontSize: 10, background: ev.color, color: '#fff', borderRadius: 4, padding: '1px 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {ev.title}
+                        {ev.virtual && '🌴 '}{ev.title}
                       </div>
                     ))}
                     {eventosDia.length > 2 && (
@@ -152,13 +174,17 @@ export default function Calendario() {
 
               {eventosDelDiaSeleccionado.map((ev) => (
                 <div key={ev.id} style={{ marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>{ev.title}</div>
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>{ev.virtual && '🌴 '}{ev.title}</div>
                   {ev.description && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{ev.description}</div>}
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Agregado por {ev.createdBy.firstName} {ev.createdBy.lastName}</div>
-                  {(user?.id === ev.createdById || user?.role === 'ADMIN') && (
-                    <button className="btn danger" style={{ padding: '2px 8px', fontSize: 11, marginTop: 4 }} onClick={() => eliminarEvento(ev.id)}>
-                      Eliminar
-                    </button>
+                  {!ev.virtual && (
+                    <>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Agregado por {ev.createdBy.firstName} {ev.createdBy.lastName}</div>
+                      {(user?.id === ev.createdById || user?.role === 'ADMIN') && (
+                        <button className="btn danger" style={{ padding: '2px 8px', fontSize: 11, marginTop: 4 }} onClick={() => eliminarEvento(ev.id)}>
+                          Eliminar
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
               ))}
