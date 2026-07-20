@@ -319,6 +319,33 @@ export default function Documentos() {
   }
 
   // --- Firmar un documento pendiente ---
+  function verDocumentoPendiente(draft) {
+    const fechaTexto = new Date(draft.fecha).toLocaleDateString('es-PE', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+    const principal = draft.signers.find((s) => s.order === 1);
+    const segundo = draft.signers.find((s) => s.order === 2);
+
+    const introTexto = reemplazarTokens(draft.template.intro, {
+      persona: `${principal.user.firstName} ${principal.user.lastName}`,
+      cargo: principal.user.cargo || '',
+      fecha: fechaTexto,
+      firmante2: segundo ? `${segundo.user.firstName} ${segundo.user.lastName}` : '',
+      firmante2Cargo: segundo?.user.cargo || '',
+    });
+    const camposTabla = (draft.template.fields || []).map((c) => ({ label: c.label, value: draft.values[c.key] || '' }));
+
+    const html = construirDocumentoHTML({
+      nombrePlantilla: draft.template.name,
+      introTexto,
+      camposTabla,
+      imageData: draft.imageData,
+      firmante1: { nombre: `${principal.user.firstName} ${principal.user.lastName}`, cargo: principal.user.cargo, firma: principal.signedAt ? principal.signature : null },
+      firmante2: segundo ? { nombre: `${segundo.user.firstName} ${segundo.user.lastName}`, cargo: segundo.user.cargo, firma: segundo.signedAt ? segundo.signature : null } : null,
+    });
+    const ventana = window.open('', '_blank');
+    ventana.document.write(html);
+    ventana.document.close();
+  }
+
   function empezarFirma(draft) {
     setFirmandoId(draft.id);
     setModoFirmar(miFirmaGuardada ? 'guardada' : 'dibujar');
@@ -513,11 +540,19 @@ export default function Documentos() {
                 )}
 
                 {firmandoId !== d.id ? (
-                  <button className="btn" style={{ padding: '6px 16px', fontSize: 13 }} onClick={() => empezarFirma(d)}>
-                    Ver y firmar
-                  </button>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="btn secondary" style={{ padding: '6px 16px', fontSize: 13 }} onClick={() => verDocumentoPendiente(d)}>
+                      Ver documento completo
+                    </button>
+                    <button className="btn" style={{ padding: '6px 16px', fontSize: 13 }} onClick={() => empezarFirma(d)}>
+                      Firmar
+                    </button>
+                  </div>
                 ) : (
                   <div>
+                    <button type="button" onClick={() => verDocumentoPendiente(d)} style={{ background: 'none', border: 'none', color: 'var(--primary-light)', fontSize: 12, padding: 0, marginBottom: 10, display: 'block' }}>
+                      Ver documento completo de nuevo
+                    </button>
                     <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
                       {miFirmaGuardada && (
                         <button type="button" className={`btn ${modoFirmar === 'guardada' ? '' : 'secondary'}`} style={{ padding: '5px 12px', fontSize: 12 }} onClick={() => setModoFirmar('guardada')}>
