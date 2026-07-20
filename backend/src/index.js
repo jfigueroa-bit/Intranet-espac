@@ -16,6 +16,7 @@ const documentTypesRoutes = require('./routes/documentTypes');
 const documentsRoutes = require('./routes/documents');
 const documentTemplatesRoutes = require('./routes/documentTemplates');
 const documentDraftsRoutes = require('./routes/documentDrafts');
+const vacationsRoutes = require('./routes/vacations');
 const { setIO, salaDeUsuario } = require('./utils/socket');
 
 const app = express();
@@ -38,6 +39,7 @@ app.use('/api/document-types', documentTypesRoutes);
 app.use('/api/documents', documentsRoutes);
 app.use('/api/document-templates', documentTemplatesRoutes);
 app.use('/api/document-drafts', documentDraftsRoutes);
+app.use('/api/vacations', vacationsRoutes);
 
 // Manejador de errores general: si una ruta falla sin haberlo previsto,
 // devolvemos un mensaje claro en vez de que el navegador reciba una
