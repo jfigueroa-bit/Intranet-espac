@@ -46,7 +46,7 @@ router.post('/', requireAuth, requireGestorDocumentos, async (req, res) => {
       values,
       fecha: new Date(fecha),
       imageData: imageData || null,
-      documentTypeId: documentTypeId || null,
+      documentTypeId: documentTypeId ? Number(documentTypeId) : null,
       ownerId: Number(ownerId),
       createdById: req.user.id,
       signers: {
