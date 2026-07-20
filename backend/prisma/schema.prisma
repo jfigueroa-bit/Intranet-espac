@@ -83,6 +83,8 @@ model User {
   borradoresDueno      DocumentDraft[] @relation("BorradorDueno")
   borradoresCreados    DocumentDraft[] @relation("BorradorCreador")
   firmasPendientes     DocumentSigner[]
+  vacacionesPropias    VacationRequest[] @relation("VacacionesPropias")
+  vacacionesDecididas  VacationRequest[] @relation("VacacionesDecididas")
 }
 
 model Announcement {
@@ -234,4 +236,21 @@ model DocumentSigner {
   signature String?   @db.Text // la firma que se usó en esta ocasión
 
   @@unique([draftId, userId])
+}
+
+// Solicitud de vacaciones. Solo Admin, Gerencia y RRHH pueden ver y aprobar/rechazar.
+model VacationRequest {
+  id           Int       @id @default(autoincrement())
+  userId       Int
+  user         User      @relation("VacacionesPropias", fields: [userId], references: [id])
+  startDate    DateTime
+  endDate      DateTime
+  days         Int       // cantidad de días solicitados (calculado)
+  reason       String?   // motivo, no obligatorio
+  status       String    @default("PENDIENTE") // PENDIENTE | APROBADA | RECHAZADA
+  decidedById  Int?
+  decidedBy    User?     @relation("VacacionesDecididas", fields: [decidedById], references: [id])
+  decisionNote String?
+  createdAt    DateTime  @default(now())
+  decidedAt    DateTime?
 }
