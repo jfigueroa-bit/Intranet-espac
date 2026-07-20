@@ -6,6 +6,7 @@ const { requireRole } = require('../middleware/roles');
 const { generarUsername, generarPasswordTemporal } = require('../utils/username');
 const { normalizarHorario } = require('../utils/schedule');
 const { notificar } = require('../utils/socket');
+const { idsDeVacacionesHoy } = require('../utils/vacationStatus');
 
 const router = express.Router();
 
@@ -17,6 +18,16 @@ const USER_LISTADO = {
   areas: { include: { area: true } },
 };
 
+// Si alguien tiene una solicitud de vacaciones APROBADA que cubre el día de hoy,
+// se le muestra como "VACACIONES" aunque en la base de datos tenga guardado otro
+// estado — así aparece y desaparece solo, sin que nadie tenga que cambiarlo a mano.
+async function conEstadoDeVacaciones(users) {
+  const enVacaciones = await idsDeVacacionesHoy();
+  const lista = Array.isArray(users) ? users : [users];
+  const resultado = lista.map((u) => (enVacaciones.has(u.id) ? { ...u, workStatus: 'VACACIONES' } : u));
+  return Array.isArray(users) ? resultado : resultado[0];
+}
+
 // GET /api/users  -> directorio de la compañía (cualquier usuario logueado puede ver)
 router.get('/', requireAuth, async (req, res) => {
   const users = await prisma.user.findMany({
@@ -24,7 +35,7 @@ router.get('/', requireAuth, async (req, res) => {
     select: USER_LISTADO,
     orderBy: [{ hierarchyOrder: 'asc' }, { firstName: 'asc' }],
   });
-  res.json(users);
+  res.json(await conEstadoDeVacaciones(users));
 });
 
 // GET /api/users/:id/firma -> trae la firma digital guardada de alguien, para incrustarla
@@ -202,6 +213,21 @@ router.patch(
     res.json(actualizado);
   }
 );
+
+// PATCH /api/users/:id/vacaciones -> SOLO Admin o RRHH configuran cuántos días de vacaciones tiene alguien
+router.patch('/:id/vacaciones', requireAuth, requireRole('ADMIN', 'RRHH'), async (req, res) => {
+  const id = Number(req.params.id);
+  const { vacationDaysTotal } = req.body;
+  if (vacationDaysTotal === undefined || Number(vacationDaysTotal) < 0) {
+    return res.status(400).json({ error: 'Indica una cantidad de días válida' });
+  }
+  const actualizado = await prisma.user.update({
+    where: { id },
+    data: { vacationDaysTotal: Number(vacationDaysTotal) },
+    select: USER_LISTADO,
+  });
+  res.json(actualizado);
+});
 
 // POST /api/users/:id/reset-password -> Admin restablece la contraseña de alguien
 router.post('/:id/reset-password', requireAuth, requireRole('ADMIN'), async (req, res) => {
