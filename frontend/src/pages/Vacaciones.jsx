@@ -37,7 +37,14 @@ export default function Vacaciones() {
   const [diasTemp, setDiasTemp] = useState({});
   const [guardandoDiasId, setGuardandoDiasId] = useState(null);
 
-  useEffect(() => { cargarMias(); }, []);
+  const [usuariosTodos, setUsuariosTodos] = useState([]);
+  const esJefe = usuariosTodos.some((u) => u.managerId === user?.id);
+  const puedeVerSolicitudes = puedeAprobar || esJefe;
+
+  useEffect(() => {
+    cargarMias();
+    api.get('/users').then((res) => setUsuariosTodos(res.data));
+  }, []);
 
   useEffect(() => {
     if (tab === 'solicitudes') cargarTodas();
@@ -94,6 +101,17 @@ export default function Vacaciones() {
     }
   }
 
+  async function eliminarSolicitud(id) {
+    if (!confirm('¿Eliminar esta solicitud de vacaciones? Si ya estaba aprobada, se le devuelven los días a la persona.')) return;
+    setError('');
+    try {
+      await api.delete(`/vacations/${id}`);
+      cargarTodas();
+    } catch (err) {
+      setError(err.response?.data?.error || 'No se pudo eliminar la solicitud');
+    }
+  }
+
   async function guardarDiasTotales(id) {
     setGuardandoDiasId(id);
     try {
@@ -114,7 +132,7 @@ export default function Vacaciones() {
         <button className={`btn ${tab === 'mias' ? '' : 'secondary'}`} style={{ padding: '6px 16px', fontSize: 13 }} onClick={() => setTab('mias')}>
           Mis vacaciones
         </button>
-        {puedeAprobar && (
+        {puedeVerSolicitudes && (
           <button className={`btn ${tab === 'solicitudes' ? '' : 'secondary'}`} style={{ padding: '6px 16px', fontSize: 13 }} onClick={() => setTab('solicitudes')}>
             Solicitudes
           </button>
@@ -199,7 +217,7 @@ export default function Vacaciones() {
         </div>
       )}
 
-      {tab === 'solicitudes' && puedeAprobar && (
+      {tab === 'solicitudes' && puedeVerSolicitudes && (
         <div>
           <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
             {['PENDIENTE', 'APROBADA', 'RECHAZADA', ''].map((s) => (
@@ -230,7 +248,7 @@ export default function Vacaciones() {
                 <Badge status={s.status} />
               </div>
 
-              {s.status === 'PENDIENTE' && (
+              {puedeAprobar && s.status === 'PENDIENTE' && (
                 decidiendoId === s.id ? (
                   <div style={{ marginTop: 10 }}>
                     <input
@@ -257,6 +275,11 @@ export default function Vacaciones() {
                   {s.decisionNote && ` — ${s.decisionNote}`}
                 </div>
               )}
+              <div style={{ marginTop: 10 }}>
+                <button className="btn danger" style={{ padding: '5px 14px', fontSize: 12 }} onClick={() => eliminarSolicitud(s.id)}>
+                  Eliminar solicitud
+                </button>
+              </div>
             </div>
           ))}
           {todas.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>No hay solicitudes aquí.</div>}
