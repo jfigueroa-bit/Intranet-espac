@@ -80,6 +80,9 @@ model User {
   documentosPersonales Document[] @relation("DocumentosPersonales")
   documentosSubidos    Document[] @relation("DocumentosSubidos")
   plantillasCreadas    DocumentTemplate[]
+  borradoresDueno      DocumentDraft[] @relation("BorradorDueno")
+  borradoresCreados    DocumentDraft[] @relation("BorradorCreador")
+  firmasPendientes     DocumentSigner[]
 }
 
 model Announcement {
@@ -151,6 +154,7 @@ model DocumentType {
   createdAt   DateTime @default(now())
   documents   Document[]
   permissions DocumentTypeAreaPermission[] // si no tiene ninguna, es visible para todas las áreas
+  drafts      DocumentDraft[]
 }
 
 model DocumentTypeAreaPermission {
@@ -177,6 +181,8 @@ model Document {
   uploadedById   Int
   uploadedBy     User          @relation("DocumentosSubidos", fields: [uploadedById], references: [id])
   createdAt      DateTime      @default(now())
+
+  draft DocumentDraft?
 }
 
 model DocumentTemplate {
@@ -187,4 +193,45 @@ model DocumentTemplate {
   createdById Int
   createdBy   User     @relation(fields: [createdById], references: [id])
   createdAt   DateTime @default(now())
+
+  drafts DocumentDraft[]
+}
+
+// Un documento "en camino": se creó desde una plantilla con sus datos llenados,
+// pero todavía falta que una o dos personas pongan su firma antes de quedar
+// como un Document final y definitivo.
+model DocumentDraft {
+  id             Int          @id @default(autoincrement())
+  templateId     Int
+  template       DocumentTemplate @relation(fields: [templateId], references: [id])
+  title          String
+  values         Json         @default("{}") // valores llenados de los campos personalizados
+  fecha          DateTime
+  imageData      String?      @db.Text // imagen opcional adjunta al documento
+  documentTypeId Int?
+  documentType   DocumentType? @relation(fields: [documentTypeId], references: [id])
+  ownerId        Int          // persona principal (dueña final del documento)
+  owner          User         @relation("BorradorDueno", fields: [ownerId], references: [id])
+  createdById    Int
+  createdBy      User         @relation("BorradorCreador", fields: [createdById], references: [id])
+  status         String       @default("PENDIENTE") // PENDIENTE | COMPLETADO
+  documentId     Int?         @unique // una vez firmado por todos, apunta al Document final
+  document       Document?    @relation(fields: [documentId], references: [id])
+  createdAt      DateTime     @default(now())
+
+  signers DocumentSigner[]
+}
+
+// Cada persona que debe firmar un borrador (1 o 2 por documento)
+model DocumentSigner {
+  id        Int       @id @default(autoincrement())
+  draftId   Int
+  draft     DocumentDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  userId    Int
+  user      User      @relation(fields: [userId], references: [id])
+  order     Int       // 1 = firmante principal, 2 = segundo firmante
+  signedAt  DateTime?
+  signature String?   @db.Text // la firma que se usó en esta ocasión
+
+  @@unique([draftId, userId])
 }
