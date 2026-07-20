@@ -19,6 +19,17 @@ function diasEntre(inicio, fin) {
   return Math.round((fin.getTime() - inicio.getTime()) / msPorDia) + 1;
 }
 
+async function esJefeDe(jefeId, empleadoId) {
+  const persona = await prisma.user.findUnique({ where: { id: empleadoId }, select: { managerId: true } });
+  return persona?.managerId === jefeId;
+}
+
+function puedeGestionarSolicitud(req, solicitud) {
+  if (['ADMIN', 'GERENCIA', 'RRHH'].includes(req.user.role)) return Promise.resolve(true);
+  if (solicitud.userId === req.user.id) return Promise.resolve(false); // uno mismo no se auto-gestiona la eliminación
+  return esJefeDe(req.user.id, solicitud.userId);
+}
+
 // GET /api/vacations -> mis propias solicitudes
 router.get('/', requireAuth, async (req, res) => {
   const solicitudes = await prisma.vacationRequest.findMany({
@@ -29,11 +40,24 @@ router.get('/', requireAuth, async (req, res) => {
   res.json(solicitudes);
 });
 
-// GET /api/vacations/todas -> Admin, Gerencia y RRHH ven las solicitudes de todos
-router.get('/todas', requireAuth, requireRole('ADMIN', 'GERENCIA', 'RRHH'), async (req, res) => {
+// GET /api/vacations/todas -> Admin, Gerencia y RRHH ven las de todos; un jefe de
+// área ve solo las de su propia gente (sus reportes directos)
+router.get('/todas', requireAuth, async (req, res) => {
   const { status } = req.query;
+  const esAdminGerenciaRRHH = ['ADMIN', 'GERENCIA', 'RRHH'].includes(req.user.role);
+
+  let where = status ? { status } : {};
+
+  if (!esAdminGerenciaRRHH) {
+    const reportes = await prisma.user.findMany({ where: { managerId: req.user.id }, select: { id: true } });
+    if (reportes.length === 0) {
+      return res.status(403).json({ error: 'No tienes permiso para ver solicitudes de vacaciones' });
+    }
+    where = { ...where, userId: { in: reportes.map((r) => r.id) } };
+  }
+
   const solicitudes = await prisma.vacationRequest.findMany({
-    where: status ? { status } : {},
+    where,
     include: INCLUIR,
     orderBy: { createdAt: 'desc' },
   });
@@ -127,6 +151,38 @@ router.patch('/:id/decidir', requireAuth, requireRole('ADMIN', 'GERENCIA', 'RRHH
   });
 
   res.json(actualizada);
+});
+
+// DELETE /api/vacations/:id -> Admin, Gerencia, RRHH, o el jefe directo de la persona,
+// pueden eliminar una solicitud (incluso ya aprobada). Si estaba aprobada, se le
+// devuelven los días usados.
+router.delete('/:id', requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  const solicitud = await prisma.vacationRequest.findUnique({ where: { id } });
+  if (!solicitud) return res.status(404).json({ error: 'No encontrada' });
+
+  const puede = await puedeGestionarSolicitud(req, solicitud);
+  if (!puede) {
+    return res.status(403).json({ error: 'No tienes permiso para eliminar esta solicitud' });
+  }
+
+  if (solicitud.status === 'APROBADA') {
+    const usuario = await prisma.user.findUnique({ where: { id: solicitud.userId } });
+    const nuevoUsado = Math.max(0, usuario.vacationDaysUsed - solicitud.days);
+    await prisma.user.update({ where: { id: solicitud.userId }, data: { vacationDaysUsed: nuevoUsado } });
+  }
+
+  await prisma.vacationRequest.delete({ where: { id } });
+
+  await notificar({
+    userId: solicitud.userId,
+    type: 'VACACIONES',
+    title: 'Solicitud de vacaciones eliminada',
+    message: `Tu solicitud de ${solicitud.days} día(s) fue eliminada por administración.`,
+    link: '/vacaciones',
+  });
+
+  res.json({ ok: true });
 });
 
 module.exports = router;
