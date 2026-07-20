@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { construirDocumentoHTML, reemplazarTokens, slugify } from '../utils/documentoHTML';
+import FirmaCanvas from '../components/FirmaCanvas.jsx';
 
 const MAX_DOC_MB = 5;
+const MAX_IMG_MB = 3;
 
 export default function Documentos() {
   const { user } = useAuth();
@@ -24,15 +26,25 @@ export default function Documentos() {
   const [error, setError] = useState('');
   const [subiendo, setSubiendo] = useState(false);
 
-  // --- "Crear documento": plantillas guardadas + generación con 2 firmantes ---
+  // --- "Crear documento": plantillas guardadas (creables y editables) + envío a firmar ---
   const [plantillas, setPlantillas] = useState([]);
   const [subVistaCrear, setSubVistaCrear] = useState('generar'); // 'generar' | 'nueva'
   const [plantillaId, setPlantillaId] = useState('');
-  const [formGenerar, setFormGenerar] = useState({ ownerId: '', firmante2Id: '', fecha: new Date().toISOString().slice(0, 10), documentTypeId: '', valores: {} });
+  const [formGenerar, setFormGenerar] = useState({ ownerId: '', firmante2Id: '', fecha: new Date().toISOString().slice(0, 10), documentTypeId: '', valores: {}, imagen: null, imagenNombre: '' });
   const [generando, setGenerando] = useState(false);
+  const [enviado, setEnviado] = useState(false);
   const [nuevaPlantilla, setNuevaPlantilla] = useState({ name: '', intro: '', campos: [] });
+  const [editandoPlantillaId, setEditandoPlantillaId] = useState(null);
   const [nuevoCampoLabel, setNuevoCampoLabel] = useState('');
   const [guardandoPlantilla, setGuardandoPlantilla] = useState(false);
+
+  // --- "Firmas pendientes" ---
+  const [pendientesFirma, setPendientesFirma] = useState([]);
+  const [firmandoId, setFirmandoId] = useState(null);
+  const [modoFirmar, setModoFirmar] = useState('guardada'); // 'guardada' | 'subir' | 'dibujar'
+  const [firmaTemporal, setFirmaTemporal] = useState(null);
+  const [enviandoFirma, setEnviandoFirma] = useState(false);
+  const [miFirmaGuardada, setMiFirmaGuardada] = useState(null);
 
   const esJefe = usuarios.some((u) => u.managerId === user?.id);
   const puedeGestionar = esAdmin || esRRHH || esJefe;
@@ -47,19 +59,22 @@ export default function Documentos() {
 
   useEffect(() => {
     if (tab === 'personal') cargarPersonales(usuarioPersonalId);
+    if (tab === 'firmas') cargarPendientesFirma();
   }, [tab, usuarioPersonalId]);
 
   async function cargarBase() {
-    const [t, a, g, u] = await Promise.all([
+    const [t, a, g, u, yo] = await Promise.all([
       api.get('/document-types'),
       api.get('/areas'),
       api.get('/documents', { params: { scope: 'GENERAL' } }),
       api.get('/users'),
+      api.get('/auth/me'),
     ]);
     setTipos(t.data);
     setAreas(a.data);
     setGenerales(g.data);
     setUsuarios(u.data);
+    setMiFirmaGuardada(yo.data.signatureData || null);
     try {
       const p = await api.get('/document-templates');
       setPlantillas(p.data);
@@ -73,16 +88,21 @@ export default function Documentos() {
     setPersonales(data);
   }
 
-  function leerArchivo(e, setForm) {
+  async function cargarPendientesFirma() {
+    const { data } = await api.get('/document-drafts', { params: { rol: 'pendientes' } });
+    setPendientesFirma(data);
+  }
+
+  function leerArchivo(e, setForm, campo = 'archivo', campoNombre = 'archivoNombre', maxMB = MAX_DOC_MB) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > MAX_DOC_MB * 1024 * 1024) {
-      setError(`El archivo no puede pesar más de ${MAX_DOC_MB}MB`);
+    if (file.size > maxMB * 1024 * 1024) {
+      setError(`El archivo no puede pesar más de ${maxMB}MB`);
       return;
     }
     setError('');
     const reader = new FileReader();
-    reader.onload = () => setForm((f) => ({ ...f, archivo: reader.result, archivoNombre: file.name }));
+    reader.onload = () => setForm((f) => ({ ...f, [campo]: reader.result, [campoNombre]: file.name }));
     reader.readAsDataURL(file);
   }
 
@@ -176,7 +196,7 @@ export default function Documentos() {
     cargarBase();
   }
 
-  // --- Nueva plantilla ---
+  // --- Nueva plantilla / editar plantilla ---
   function agregarCampo() {
     if (!nuevoCampoLabel.trim()) return;
     const key = slugify(nuevoCampoLabel) || `campo_${nuevaPlantilla.campos.length + 1}`;
@@ -188,6 +208,18 @@ export default function Documentos() {
     setNuevaPlantilla((p) => ({ ...p, campos: p.campos.filter((c) => c.key !== key) }));
   }
 
+  function empezarPlantillaNueva() {
+    setEditandoPlantillaId(null);
+    setNuevaPlantilla({ name: '', intro: '', campos: [] });
+    setSubVistaCrear('nueva');
+  }
+
+  function empezarEdicionPlantilla(p) {
+    setEditandoPlantillaId(p.id);
+    setNuevaPlantilla({ name: p.name, intro: p.intro, campos: p.fields || [] });
+    setSubVistaCrear('nueva');
+  }
+
   async function guardarPlantilla(e) {
     e.preventDefault();
     setError('');
@@ -197,10 +229,19 @@ export default function Documentos() {
     }
     setGuardandoPlantilla(true);
     try {
-      const { data } = await api.post('/document-templates', nuevaPlantilla);
-      setPlantillas((p) => [...p, data]);
+      if (editandoPlantillaId) {
+        const { data } = await api.patch(`/document-templates/${editandoPlantillaId}`, {
+          name: nuevaPlantilla.name, intro: nuevaPlantilla.intro, fields: nuevaPlantilla.campos,
+        });
+        setPlantillas((p) => p.map((pl) => (pl.id === data.id ? data : pl)));
+        setPlantillaId(data.id);
+      } else {
+        const { data } = await api.post('/document-templates', { name: nuevaPlantilla.name, intro: nuevaPlantilla.intro, fields: nuevaPlantilla.campos });
+        setPlantillas((p) => [...p, data]);
+        setPlantillaId(data.id);
+      }
       setNuevaPlantilla({ name: '', intro: '', campos: [] });
-      setPlantillaId(data.id);
+      setEditandoPlantillaId(null);
       setSubVistaCrear('generar');
     } catch (err) {
       setError(err.response?.data?.error || 'No se pudo guardar la plantilla');
@@ -216,80 +257,96 @@ export default function Documentos() {
     if (Number(plantillaId) === id) setPlantillaId('');
   }
 
-  // --- Generar documento a partir de una plantilla ---
+  // --- Generar (enviar a firmar) un documento a partir de una plantilla ---
   const plantilla = plantillas.find((p) => p.id === Number(plantillaId));
 
   function actualizarValorCampo(key, value) {
     setFormGenerar((f) => ({ ...f, valores: { ...f.valores, [key]: value } }));
   }
 
-  async function obtenerFirma(userId) {
-    try {
-      const { data } = await api.get(`/users/${userId}/firma`);
-      return data.signatureData;
-    } catch {
-      return null;
-    }
+  function verVistaPrevia() {
+    if (!plantilla) return;
+    const principal = usuarios.find((u) => u.id === Number(formGenerar.ownerId));
+    const segundo = formGenerar.firmante2Id ? usuarios.find((u) => u.id === Number(formGenerar.firmante2Id)) : null;
+    const fechaTexto = new Date(formGenerar.fecha + 'T00:00:00').toLocaleDateString('es-PE', { day: 'numeric', month: 'long', year: 'numeric' });
+
+    const introTexto = reemplazarTokens(plantilla.intro, {
+      persona: principal ? `${principal.firstName} ${principal.lastName}` : '(persona principal)',
+      cargo: principal?.cargo || '',
+      fecha: fechaTexto,
+      firmante2: segundo ? `${segundo.firstName} ${segundo.lastName}` : '',
+      firmante2Cargo: segundo?.cargo || '',
+    });
+    const camposTabla = (plantilla.fields || []).map((c) => ({ label: c.label, value: formGenerar.valores[c.key] || '' }));
+
+    const html = construirDocumentoHTML({
+      nombrePlantilla: plantilla.name,
+      introTexto,
+      camposTabla,
+      imageData: formGenerar.imagen,
+      firmante1: principal ? { nombre: `${principal.firstName} ${principal.lastName}`, cargo: principal.cargo, firma: null } : null,
+      firmante2: segundo ? { nombre: `${segundo.firstName} ${segundo.lastName}`, cargo: segundo.cargo, firma: null } : null,
+    });
+    const ventana = window.open('', '_blank');
+    ventana.document.write(html);
+    ventana.document.close();
   }
 
   async function generarDocumento(e) {
     e.preventDefault();
     setError('');
+    setEnviado(false);
     if (!plantilla) { setError('Elige una plantilla'); return; }
     if (!formGenerar.ownerId) { setError('Elige a quién pertenece este documento'); return; }
     setGenerando(true);
     try {
-      const principal = usuarios.find((u) => u.id === Number(formGenerar.ownerId));
-      const segundo = formGenerar.firmante2Id ? usuarios.find((u) => u.id === Number(formGenerar.firmante2Id)) : null;
-
-      const [firma1, firma2] = await Promise.all([
-        obtenerFirma(principal.id),
-        segundo ? obtenerFirma(segundo.id) : Promise.resolve(null),
-      ]);
-
-      const fechaTexto = new Date(formGenerar.fecha + 'T00:00:00').toLocaleDateString('es-PE', { day: 'numeric', month: 'long', year: 'numeric' });
-
-      const introTexto = reemplazarTokens(plantilla.intro, {
-        persona: `${principal.firstName} ${principal.lastName}`,
-        cargo: principal.cargo || '',
-        fecha: fechaTexto,
-        firmante2: segundo ? `${segundo.firstName} ${segundo.lastName}` : '',
-        firmante2Cargo: segundo?.cargo || '',
-      });
-
-      const camposTabla = (plantilla.fields || []).map((c) => ({ label: c.label, value: formGenerar.valores[c.key] || '' }));
-
-      const html = construirDocumentoHTML({
-        nombrePlantilla: plantilla.name,
-        introTexto,
-        camposTabla,
-        firmante1: { nombre: `${principal.firstName} ${principal.lastName}`, cargo: principal.cargo, firma: firma1 },
-        firmante2: segundo ? { nombre: `${segundo.firstName} ${segundo.lastName}`, cargo: segundo.cargo, firma: firma2 } : null,
-      });
-
-      const fileData = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
-
-      await api.post('/documents', {
-        title: `${plantilla.name} — ${principal.firstName} ${principal.lastName}`,
-        fileName: `${plantilla.name.replace(/\s+/g, '-')}-${principal.firstName}-${formGenerar.fecha}.html`,
-        mimeType: 'text/html',
-        fileData,
-        scope: 'PERSONAL',
-        documentTypeId: formGenerar.documentTypeId || null,
+      await api.post('/document-drafts', {
+        templateId: plantilla.id,
         ownerId: formGenerar.ownerId,
+        firmante2Id: formGenerar.firmante2Id || null,
+        fecha: formGenerar.fecha,
+        values: formGenerar.valores,
+        documentTypeId: formGenerar.documentTypeId || null,
+        imageData: formGenerar.imagen,
       });
-
-      const ventana = window.open('', '_blank');
-      ventana.document.write(html);
-      ventana.document.close();
-
-      const ownerAnterior = formGenerar.ownerId;
-      setFormGenerar({ ownerId: '', firmante2Id: '', fecha: new Date().toISOString().slice(0, 10), documentTypeId: '', valores: {} });
-      if (Number(ownerAnterior) === Number(usuarioPersonalId)) cargarPersonales(usuarioPersonalId);
+      setEnviado(true);
+      setFormGenerar({ ownerId: '', firmante2Id: '', fecha: new Date().toISOString().slice(0, 10), documentTypeId: '', valores: {}, imagen: null, imagenNombre: '' });
     } catch (err) {
-      setError(err.response?.data?.error || 'No se pudo generar el documento');
+      setError(err.response?.data?.error || 'No se pudo enviar el documento a firmar');
     } finally {
       setGenerando(false);
+    }
+  }
+
+  // --- Firmar un documento pendiente ---
+  function empezarFirma(draft) {
+    setFirmandoId(draft.id);
+    setModoFirmar(miFirmaGuardada ? 'guardada' : 'dibujar');
+    setFirmaTemporal(null);
+    setError('');
+  }
+
+  function elegirFirmaSubida(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setFirmaTemporal(reader.result);
+    reader.readAsDataURL(file);
+  }
+
+  async function confirmarFirma(draftId) {
+    setEnviandoFirma(true);
+    setError('');
+    try {
+      await api.post(`/document-drafts/${draftId}/firmar`, {
+        signature: modoFirmar === 'guardada' ? undefined : firmaTemporal,
+      });
+      setFirmandoId(null);
+      cargarPendientesFirma();
+    } catch (err) {
+      setError(err.response?.data?.error || 'No se pudo registrar tu firma');
+    } finally {
+      setEnviandoFirma(false);
     }
   }
 
@@ -303,6 +360,9 @@ export default function Documentos() {
         </button>
         <button className={`btn ${tab === 'personal' ? '' : 'secondary'}`} style={{ padding: '6px 16px', fontSize: 13 }} onClick={() => setTab('personal')}>
           Mis documentos
+        </button>
+        <button className={`btn ${tab === 'firmas' ? '' : 'secondary'}`} style={{ padding: '6px 16px', fontSize: 13 }} onClick={() => setTab('firmas')}>
+          Firmas pendientes{pendientesFirma.length > 0 ? ` (${pendientesFirma.length})` : ''}
         </button>
         {puedeGestionar && (
           <button className={`btn ${tab === 'crear' ? '' : 'secondary'}`} style={{ padding: '6px 16px', fontSize: 13 }} onClick={() => setTab('crear')}>
@@ -431,20 +491,96 @@ export default function Documentos() {
         </div>
       )}
 
+      {tab === 'firmas' && (
+        <div>
+          <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>
+            Documentos que alguien te mandó y necesitan tu firma para quedar completos.
+          </p>
+          {pendientesFirma.map((d) => {
+            const yo = d.signers.find((s) => s.userId === user?.id);
+            const otros = d.signers.filter((s) => s.userId !== user?.id);
+            return (
+              <div key={d.id} className="card" style={{ marginBottom: 12 }}>
+                <div style={{ fontWeight: 600 }}>{d.title}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+                  Enviado por {d.createdBy.firstName} {d.createdBy.lastName} · Para {d.owner.firstName} {d.owner.lastName} ·{' '}
+                  {new Date(d.fecha).toLocaleDateString('es-PE', { timeZone: 'UTC' })}
+                </div>
+                {otros.length > 0 && (
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+                    {otros.map((s) => `${s.user.firstName} ${s.user.lastName}: ${s.signedAt ? 'ya firmó ✓' : 'pendiente'}`).join(' · ')}
+                  </div>
+                )}
+
+                {firmandoId !== d.id ? (
+                  <button className="btn" style={{ padding: '6px 16px', fontSize: 13 }} onClick={() => empezarFirma(d)}>
+                    Ver y firmar
+                  </button>
+                ) : (
+                  <div>
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                      {miFirmaGuardada && (
+                        <button type="button" className={`btn ${modoFirmar === 'guardada' ? '' : 'secondary'}`} style={{ padding: '5px 12px', fontSize: 12 }} onClick={() => setModoFirmar('guardada')}>
+                          Usar mi firma guardada
+                        </button>
+                      )}
+                      <button type="button" className={`btn ${modoFirmar === 'subir' ? '' : 'secondary'}`} style={{ padding: '5px 12px', fontSize: 12 }} onClick={() => setModoFirmar('subir')}>
+                        Subir imagen
+                      </button>
+                      <button type="button" className={`btn ${modoFirmar === 'dibujar' ? '' : 'secondary'}`} style={{ padding: '5px 12px', fontSize: 12 }} onClick={() => setModoFirmar('dibujar')}>
+                        Dibujar firma
+                      </button>
+                    </div>
+
+                    {modoFirmar === 'guardada' && miFirmaGuardada && (
+                      <img src={miFirmaGuardada} alt="Mi firma" style={{ maxHeight: 70, background: '#fafafa', border: '1px solid var(--border)', borderRadius: 8, padding: 6, marginBottom: 10 }} />
+                    )}
+                    {modoFirmar === 'subir' && (
+                      <div style={{ marginBottom: 10 }}>
+                        <input type="file" accept="image/*" onChange={elegirFirmaSubida} />
+                        {firmaTemporal && <img src={firmaTemporal} alt="Vista previa" style={{ maxHeight: 70, display: 'block', marginTop: 8 }} />}
+                      </div>
+                    )}
+                    {modoFirmar === 'dibujar' && (
+                      <div style={{ marginBottom: 10 }}>
+                        <FirmaCanvas onGuardar={(dataUrl) => setFirmaTemporal(dataUrl)} textoBoton="Lista" />
+                        {firmaTemporal && <div style={{ fontSize: 12, color: 'var(--success)', marginTop: 6 }}>Firma capturada ✓</div>}
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        className="btn"
+                        disabled={enviandoFirma || (modoFirmar !== 'guardada' && !firmaTemporal)}
+                        onClick={() => confirmarFirma(d.id)}
+                      >
+                        {enviandoFirma ? 'Firmando...' : 'Confirmar mi firma'}
+                      </button>
+                      <button className="btn secondary" onClick={() => setFirmandoId(null)}>Cancelar</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {pendientesFirma.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>No tienes documentos pendientes de firmar.</div>}
+        </div>
+      )}
+
       {tab === 'crear' && puedeGestionar && (
         <div>
           <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
             <button className={`btn ${subVistaCrear === 'generar' ? '' : 'secondary'}`} style={{ padding: '5px 14px', fontSize: 12 }} onClick={() => setSubVistaCrear('generar')}>
               Generar documento
             </button>
-            <button className={`btn ${subVistaCrear === 'nueva' ? '' : 'secondary'}`} style={{ padding: '5px 14px', fontSize: 12 }} onClick={() => setSubVistaCrear('nueva')}>
+            <button className={`btn ${subVistaCrear === 'nueva' ? '' : 'secondary'}`} style={{ padding: '5px 14px', fontSize: 12 }} onClick={empezarPlantillaNueva}>
               + Nueva plantilla
             </button>
           </div>
 
           {subVistaCrear === 'nueva' && (
             <form onSubmit={guardarPlantilla} className="card">
-              <h3 style={{ marginTop: 0 }}>Crear una plantilla nueva</h3>
+              <h3 style={{ marginTop: 0 }}>{editandoPlantillaId ? 'Editar plantilla' : 'Crear una plantilla nueva'}</h3>
               <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
                 Escribe el texto del documento. Puedes usar estas palabras especiales y se
                 reemplazan solas cuando se genere: <code>{'{{persona}}'}</code>, <code>{'{{cargo}}'}</code>,{' '}
@@ -470,7 +606,9 @@ export default function Documentos() {
                 <label>Campos adicionales (opcional)</label>
                 <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 0 }}>
                   Ej: para un acta de préstamo podrías agregar "Equipo entregado" y "Condiciones".
-                  Estos aparecen como una tabla al final del documento.
+                  Estos aparecen como una tabla al final del documento, y se vuelven a pedir cada
+                  vez que generes un documento nuevo con esta plantilla (solo cambian los datos,
+                  no tienes que reescribir el texto).
                 </p>
                 <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
                   <input value={nuevoCampoLabel} onChange={(e) => setNuevoCampoLabel(e.target.value)} placeholder="Ej: Equipo entregado" />
@@ -484,7 +622,16 @@ export default function Documentos() {
                 ))}
               </div>
 
-              <button className="btn" disabled={guardandoPlantilla}>{guardandoPlantilla ? 'Guardando...' : 'Guardar plantilla'}</button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn" disabled={guardandoPlantilla}>
+                  {guardandoPlantilla ? 'Guardando...' : editandoPlantillaId ? 'Guardar cambios' : 'Guardar plantilla'}
+                </button>
+                {editandoPlantillaId && (
+                  <button type="button" className="btn secondary" onClick={() => { setEditandoPlantillaId(null); setSubVistaCrear('generar'); }}>
+                    Cancelar
+                  </button>
+                )}
+              </div>
             </form>
           )}
 
@@ -498,17 +645,27 @@ export default function Documentos() {
               ) : (
                 <form onSubmit={generarDocumento} className="card">
                   <h3 style={{ marginTop: 0 }}>Generar documento</h3>
+                  <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                    Se envía a firmar a la persona principal (y al segundo firmante, si eliges uno).
+                    Cada quien recibe una notificación y el documento queda completo automáticamente
+                    en cuanto todos hayan firmado.
+                  </p>
 
                   <div className="field">
                     <label>Plantilla</label>
-                    <select value={plantillaId} onChange={(e) => { setPlantillaId(e.target.value); setFormGenerar((f) => ({ ...f, valores: {} })); }} required>
+                    <select value={plantillaId} onChange={(e) => { setPlantillaId(e.target.value); setFormGenerar((f) => ({ ...f, valores: {} })); setEnviado(false); }} required>
                       <option value="">Selecciona una plantilla</option>
                       {plantillas.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
                     {plantilla && (esAdmin || plantilla.createdById === user?.id) && (
-                      <button type="button" onClick={() => eliminarPlantilla(plantilla.id)} style={{ marginTop: 6, background: 'none', border: 'none', color: 'var(--danger)', fontSize: 12 }}>
-                        Eliminar esta plantilla
-                      </button>
+                      <div style={{ display: 'flex', gap: 12, marginTop: 6 }}>
+                        <button type="button" onClick={() => empezarEdicionPlantilla(plantilla)} style={{ background: 'none', border: 'none', color: 'var(--primary-light)', fontSize: 12 }}>
+                          Editar esta plantilla
+                        </button>
+                        <button type="button" onClick={() => eliminarPlantilla(plantilla.id)} style={{ background: 'none', border: 'none', color: 'var(--danger)', fontSize: 12 }}>
+                          Eliminar esta plantilla
+                        </button>
+                      </div>
                     )}
                   </div>
 
@@ -545,6 +702,12 @@ export default function Documentos() {
                       ))}
 
                       <div className="field">
+                        <label>Imagen adjunta (opcional, máx. {MAX_IMG_MB}MB)</label>
+                        <input type="file" accept="image/*" onChange={(e) => leerArchivo(e, setFormGenerar, 'imagen', 'imagenNombre', MAX_IMG_MB)} />
+                        {formGenerar.imagen && <img src={formGenerar.imagen} alt="Vista previa" style={{ marginTop: 8, maxHeight: 140, borderRadius: 8 }} />}
+                      </div>
+
+                      <div className="field">
                         <label>Tipo de documento para clasificarlo (opcional)</label>
                         <select value={formGenerar.documentTypeId} onChange={(e) => setFormGenerar({ ...formGenerar, documentTypeId: e.target.value })}>
                           <option value="">Sin tipo</option>
@@ -552,7 +715,14 @@ export default function Documentos() {
                         </select>
                       </div>
 
-                      <button className="btn" disabled={generando}>{generando ? 'Generando...' : 'Generar documento'}</button>
+                      {enviado && <div style={{ color: 'var(--success)', fontSize: 13, marginBottom: 10 }}>Documento enviado a firmar ✓</div>}
+
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button type="button" className="btn secondary" onClick={verVistaPrevia} disabled={!formGenerar.ownerId}>
+                          Vista previa
+                        </button>
+                        <button className="btn" disabled={generando}>{generando ? 'Enviando...' : 'Enviar a firmar'}</button>
+                      </div>
                     </>
                   )}
                 </form>
