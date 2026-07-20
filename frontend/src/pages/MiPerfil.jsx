@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '../api/client';
 import AreaChip from '../components/AreaChip.jsx';
+import FirmaCanvas from '../components/FirmaCanvas.jsx';
 import { DIAS } from '../utils/dias';
 
 const ROLE_LABEL = {
@@ -16,6 +17,7 @@ export default function MiPerfil() {
   const [firmaPreview, setFirmaPreview] = useState(null);
   const [guardandoFirma, setGuardandoFirma] = useState(false);
   const [errorFirma, setErrorFirma] = useState('');
+  const [modoFirma, setModoFirma] = useState('subir'); // 'subir' | 'dibujar'
 
   useEffect(() => { cargar(); }, []);
 
@@ -47,11 +49,12 @@ export default function MiPerfil() {
     reader.readAsDataURL(file);
   }
 
-  async function guardarFirma() {
-    if (!firmaPreview) return;
+  async function guardarFirma(datosFirma) {
+    const data = datosFirma || firmaPreview;
+    if (!data) return;
     setGuardandoFirma(true);
     try {
-      await api.patch('/auth/firma', { signatureData: firmaPreview });
+      await api.patch('/auth/firma', { signatureData: data });
       setFirmaPreview(null);
       await cargar();
     } finally {
@@ -141,30 +144,48 @@ export default function MiPerfil() {
       <div className="card" style={{ marginTop: 16 }}>
         <label style={campoLabel}>Mi firma digital</label>
         <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-          Sube una foto o escaneo de tu firma una sola vez. Queda guardada para poder usarse
-          automáticamente cuando alguien genere un documento (como un acta de préstamo) y te
-          seleccione como firmante.
+          Guárdala una sola vez, subiendo una foto o dibujándola aquí mismo. Queda lista para
+          usarse automáticamente cuando alguien te mande un documento a firmar.
         </p>
 
         {perfil.signatureData && !firmaPreview && (
-          <div style={{ marginBottom: 10 }}>
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Firma guardada actualmente:</div>
             <img src={perfil.signatureData} alt="Mi firma" style={{ maxHeight: 80, background: '#fafafa', border: '1px solid var(--border)', borderRadius: 8, padding: 6 }} />
           </div>
         )}
 
-        <input type="file" accept="image/*" onChange={elegirFirma} />
-        {firmaPreview && (
-          <div style={{ marginTop: 10 }}>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Vista previa:</div>
-            <img src={firmaPreview} alt="Vista previa de firma" style={{ maxHeight: 80, background: '#fafafa', border: '1px solid var(--border)', borderRadius: 8, padding: 6 }} />
-          </div>
-        )}
-        {errorFirma && <div className="error-text">{errorFirma}</div>}
-        {firmaPreview && (
-          <button className="btn" style={{ marginTop: 10 }} onClick={guardarFirma} disabled={guardandoFirma}>
-            {guardandoFirma ? 'Guardando...' : 'Guardar firma'}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+          <button type="button" className={`btn ${modoFirma === 'subir' ? '' : 'secondary'}`} style={{ padding: '5px 14px', fontSize: 12 }} onClick={() => setModoFirma('subir')}>
+            Subir imagen
           </button>
+          <button type="button" className={`btn ${modoFirma === 'dibujar' ? '' : 'secondary'}`} style={{ padding: '5px 14px', fontSize: 12 }} onClick={() => setModoFirma('dibujar')}>
+            Dibujar firma
+          </button>
+        </div>
+
+        {modoFirma === 'subir' && (
+          <>
+            <input type="file" accept="image/*" onChange={elegirFirma} />
+            {firmaPreview && (
+              <div style={{ marginTop: 10 }}>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Vista previa:</div>
+                <img src={firmaPreview} alt="Vista previa de firma" style={{ maxHeight: 80, background: '#fafafa', border: '1px solid var(--border)', borderRadius: 8, padding: 6 }} />
+                <div>
+                  <button className="btn" style={{ marginTop: 10 }} onClick={() => guardarFirma()} disabled={guardandoFirma}>
+                    {guardandoFirma ? 'Guardando...' : 'Guardar firma'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
+
+        {modoFirma === 'dibujar' && (
+          <FirmaCanvas onGuardar={(dataUrl) => guardarFirma(dataUrl)} textoBoton={guardandoFirma ? 'Guardando...' : 'Guardar firma'} />
+        )}
+
+        {errorFirma && <div className="error-text">{errorFirma}</div>}
       </div>
     </div>
   );
