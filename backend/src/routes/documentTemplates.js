@@ -23,6 +23,25 @@ router.post('/', requireAuth, requireGestorDocumentos, async (req, res) => {
   res.status(201).json(plantilla);
 });
 
+// PATCH /api/document-templates/:id -> quien la creó, o Admin, puede editar el contenido
+router.patch('/:id', requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  const plantilla = await prisma.documentTemplate.findUnique({ where: { id } });
+  if (!plantilla) return res.status(404).json({ error: 'No encontrada' });
+  if (plantilla.createdById !== req.user.id && req.user.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'No puedes editar una plantilla que no creaste tú' });
+  }
+
+  const { name, intro, fields } = req.body;
+  const data = {};
+  if (name !== undefined) data.name = name.trim();
+  if (intro !== undefined) data.intro = intro.trim();
+  if (fields !== undefined) data.fields = fields;
+
+  const actualizada = await prisma.documentTemplate.update({ where: { id }, data });
+  res.json(actualizada);
+});
+
 // DELETE /api/document-templates/:id -> quien la creó, o Admin
 router.delete('/:id', requireAuth, async (req, res) => {
   const id = Number(req.params.id);
