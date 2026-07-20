@@ -17,7 +17,7 @@ function bloqueFirma(firmante) {
   `;
 }
 
-export function construirDocumentoHTML({ nombrePlantilla, introTexto, camposTabla = [], firmante1, firmante2 }) {
+export function construirDocumentoHTML({ nombrePlantilla, introTexto, camposTabla = [], imageData, firmante1, firmante2 }) {
   const filasTabla = camposTabla
     .filter((c) => c.value)
     .map((c) => `<tr><td class="label">${c.label}</td><td>${c.value}</td></tr>`)
@@ -39,6 +39,7 @@ export function construirDocumentoHTML({ nombrePlantilla, introTexto, camposTabl
   .encabezado .sub { font-size:13px; color:#6b6b70; margin-bottom:14px; }
   .encabezado .titulo { font-weight:700; font-size:16px; text-transform:uppercase; border-top:2px solid #1c2b4a; border-bottom:2px solid #1c2b4a; padding:8px 0; }
   .intro { font-size:14px; white-space: pre-wrap; }
+  .imagen-adjunta { max-width: 100%; border-radius: 8px; margin: 16px 0; }
   @media print { body { margin: 0; } .no-imprimir { display: none; } }
 </style>
 </head>
@@ -52,6 +53,8 @@ export function construirDocumentoHTML({ nombrePlantilla, introTexto, camposTabl
   <p class="intro">${introTexto}</p>
 
   ${filasTabla ? `<table>${filasTabla}</table>` : ''}
+
+  ${imageData ? `<img class="imagen-adjunta" src="${imageData}" alt="Imagen adjunta" />` : ''}
 
   <div class="firmas">
     ${bloqueFirma(firmante1)}
