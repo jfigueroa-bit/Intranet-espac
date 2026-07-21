@@ -8,6 +8,12 @@ const router = express.Router();
 
 const INCLUIR = { course: true };
 
+// Convierte "YYYY-MM-DD" a mediodía UTC de ese día, para que no se desfase por zona horaria
+function fechaSoloDia(texto) {
+  const [y, m, d] = texto.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+}
+
 // GET /api/students -> lista de alumnos (cualquier usuario logueado), con búsqueda opcional
 router.get('/', requireAuth, async (req, res) => {
   const { q } = req.query;
@@ -38,7 +44,7 @@ router.get('/:id', requireAuth, async (req, res) => {
 
 // POST /api/students -> matricula un alumno nuevo (el código se genera solo)
 router.post('/', requireAuth, requireRole('ADMIN', 'GERENCIA', 'VENTAS'), async (req, res) => {
-  const { firstName, lastName, email, phone, courseId, notes } = req.body;
+  const { firstName, lastName, email, phone, courseId, notes, enrollmentDate } = req.body;
   if (!firstName?.trim() || !lastName?.trim()) {
     return res.status(400).json({ error: 'Nombre y apellido son obligatorios' });
   }
@@ -55,6 +61,7 @@ router.post('/', requireAuth, requireRole('ADMIN', 'GERENCIA', 'VENTAS'), async 
       phone: phone || null,
       courseId: courseId ? Number(courseId) : null,
       notes: notes || null,
+      enrollmentDate: enrollmentDate ? fechaSoloDia(enrollmentDate) : new Date(),
     },
     include: INCLUIR,
   });
@@ -112,6 +119,7 @@ router.post('/importar', requireAuth, requireRole('ADMIN', 'GERENCIA', 'VENTAS')
         groundCourseHours: Number(fila.groundCourseHours) || 0,
         flightHours: Number(fila.flightHours) || 0,
         simulatorHours: Number(fila.simulatorHours) || 0,
+        enrollmentDate: fila.enrollmentDate ? new Date(fila.enrollmentDate) : new Date(),
       },
     });
     creados++;
@@ -125,7 +133,7 @@ router.patch('/:id', requireAuth, requireRole('ADMIN', 'GERENCIA', 'VENTAS', 'IN
   const id = Number(req.params.id);
   const {
     firstName, lastName, email, phone, courseId,
-    groundCourseHours, flightHours, simulatorHours, notes, isActive,
+    groundCourseHours, flightHours, simulatorHours, notes, isActive, enrollmentDate,
   } = req.body;
 
   const data = {};
@@ -139,6 +147,7 @@ router.patch('/:id', requireAuth, requireRole('ADMIN', 'GERENCIA', 'VENTAS', 'IN
   if (simulatorHours !== undefined) data.simulatorHours = Number(simulatorHours) || 0;
   if (notes !== undefined) data.notes = notes || null;
   if (isActive !== undefined) data.isActive = isActive;
+  if (enrollmentDate !== undefined) data.enrollmentDate = fechaSoloDia(enrollmentDate);
 
   const actualizado = await prisma.student.update({ where: { id }, data, include: INCLUIR });
   res.json(actualizado);
