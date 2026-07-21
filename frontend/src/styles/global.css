@@ -102,7 +102,7 @@ input:focus, select:focus, textarea:focus {
   background: var(--panel);
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 16px;
   padding: 0 24px;
 }
