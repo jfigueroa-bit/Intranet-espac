@@ -19,6 +19,7 @@ const MAPA_COLUMNAS = {
   correo: 'email', email: 'email', correoelectronico: 'email',
   telefono: 'phone', celular: 'phone', phone: 'phone',
   curso: 'course', course: 'course',
+  fechadeingreso: 'enrollmentDate', fechaingreso: 'enrollmentDate', fechamatricula: 'enrollmentDate', enrollmentdate: 'enrollmentDate',
   horastierra: 'groundCourseHours', horascursoentierra: 'groundCourseHours', groundcoursehours: 'groundCourseHours',
   horasvuelo: 'flightHours', flighthours: 'flightHours',
   horassimulador: 'simulatorHours', simulatorhours: 'simulatorHours',
@@ -28,7 +29,12 @@ function filaAObjeto(filaExcel) {
   const obj = {};
   Object.entries(filaExcel).forEach(([encabezado, valor]) => {
     const clave = MAPA_COLUMNAS[normalizar(encabezado)];
-    if (clave) obj[clave] = typeof valor === 'string' ? valor.trim() : valor;
+    if (!clave) return;
+    if (valor instanceof Date) {
+      obj[clave] = valor.toISOString().slice(0, 10);
+    } else {
+      obj[clave] = typeof valor === 'string' ? valor.trim() : valor;
+    }
   });
   return obj;
 }
@@ -49,7 +55,7 @@ export default function Alumnos() {
   const [error, setError] = useState('');
 
   const [mostrarNuevo, setMostrarNuevo] = useState(false);
-  const [nuevo, setNuevo] = useState({ firstName: '', lastName: '', email: '', phone: '', courseId: '' });
+  const [nuevo, setNuevo] = useState({ firstName: '', lastName: '', email: '', phone: '', courseId: '', enrollmentDate: new Date().toISOString().slice(0, 10) });
 
   const [filasImportar, setFilasImportar] = useState(null);
   const [importando, setImportando] = useState(false);
@@ -76,6 +82,7 @@ export default function Alumnos() {
       firstName: alumno.firstName, lastName: alumno.lastName,
       email: alumno.email || '', phone: alumno.phone || '',
       courseId: alumno.courseId || '',
+      enrollmentDate: alumno.enrollmentDate ? alumno.enrollmentDate.slice(0, 10) : '',
       groundCourseHours: alumno.groundCourseHours, flightHours: alumno.flightHours, simulatorHours: alumno.simulatorHours,
       notes: alumno.notes || '',
     });
@@ -111,7 +118,7 @@ export default function Alumnos() {
     setError('');
     try {
       await api.post('/students', { ...nuevo, courseId: nuevo.courseId || null });
-      setNuevo({ firstName: '', lastName: '', email: '', phone: '', courseId: '' });
+      setNuevo({ firstName: '', lastName: '', email: '', phone: '', courseId: '', enrollmentDate: new Date().toISOString().slice(0, 10) });
       setMostrarNuevo(false);
       cargarAlumnos();
     } catch (err) {
@@ -125,7 +132,7 @@ export default function Alumnos() {
     setResultadoImport(null);
     const reader = new FileReader();
     reader.onload = (ev) => {
-      const wb = XLSX.read(ev.target.result, { type: 'binary' });
+      const wb = XLSX.read(ev.target.result, { type: 'binary', cellDates: true });
       const hoja = wb.Sheets[wb.SheetNames[0]];
       const filas = XLSX.utils.sheet_to_json(hoja);
       setFilasImportar(filas.map(filaAObjeto).filter((f) => f.firstName && f.lastName));
@@ -208,6 +215,7 @@ export default function Alumnos() {
                     <div className="field"><label>Apellido</label><input value={nuevo.lastName} onChange={(e) => setNuevo({ ...nuevo, lastName: e.target.value })} required /></div>
                     <div className="field"><label>Correo (opcional)</label><input value={nuevo.email} onChange={(e) => setNuevo({ ...nuevo, email: e.target.value })} /></div>
                     <div className="field"><label>Teléfono (opcional)</label><input value={nuevo.phone} onChange={(e) => setNuevo({ ...nuevo, phone: e.target.value })} /></div>
+                    <div className="field"><label>Fecha de ingreso</label><input type="date" value={nuevo.enrollmentDate} onChange={(e) => setNuevo({ ...nuevo, enrollmentDate: e.target.value })} required /></div>
                     <div className="field">
                       <label>Curso (opcional)</label>
                       <select value={nuevo.courseId} onChange={(e) => setNuevo({ ...nuevo, courseId: e.target.value })}>
@@ -225,7 +233,7 @@ export default function Alumnos() {
                 <div style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 14 }}>
                   <p style={{ fontSize: 13, marginTop: 0 }}>
                     Se encontraron <strong>{filasImportar.length}</strong> fila(s) válidas (con nombre y apellido) en el archivo.
-                    Columnas reconocidas: Nombre, Apellido, Correo, Teléfono, Curso, Horas Tierra, Horas Vuelo, Horas Simulador.
+                    Columnas reconocidas: Nombre, Apellido, Correo, Teléfono, Curso, Fecha de Ingreso, Horas Tierra, Horas Vuelo, Horas Simulador.
                   </p>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button className="btn" disabled={importando} onClick={confirmarImportacion}>
@@ -255,6 +263,7 @@ export default function Alumnos() {
                     <th>Código</th>
                     <th>Nombre</th>
                     <th>Curso</th>
+                    <th>Fecha de ingreso</th>
                     <th>Hrs. tierra</th>
                     <th>Hrs. vuelo</th>
                     <th>Hrs. simulador</th>
@@ -266,13 +275,14 @@ export default function Alumnos() {
                       <td>{a.code}</td>
                       <td>{a.firstName} {a.lastName}</td>
                       <td>{a.course?.name || '—'}</td>
+                      <td>{new Date(a.enrollmentDate).toLocaleDateString('es-PE', { timeZone: 'UTC' })}</td>
                       <td>{a.groundCourseHours}</td>
                       <td>{a.flightHours}</td>
                       <td>{a.simulatorHours}</td>
                     </tr>
                   ))}
                   {alumnos.length === 0 && (
-                    <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 16 }}>No se encontraron alumnos.</td></tr>
+                    <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 16 }}>No se encontraron alumnos.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -284,7 +294,7 @@ export default function Alumnos() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 16 }}>{seleccionado.code}</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Matriculado {new Date(seleccionado.createdAt).toLocaleDateString('es-PE')}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Ingresó el {new Date(seleccionado.enrollmentDate).toLocaleDateString('es-PE', { timeZone: 'UTC' })}</div>
                 </div>
                 <button onClick={() => setSeleccionado(null)} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer' }}>×</button>
               </div>
@@ -294,6 +304,7 @@ export default function Alumnos() {
                 <div className="field"><label>Apellido</label><input value={edit.lastName} onChange={(e) => setEdit({ ...edit, lastName: e.target.value })} disabled={!puedeGestionar} /></div>
                 <div className="field"><label>Correo</label><input value={edit.email} onChange={(e) => setEdit({ ...edit, email: e.target.value })} disabled={!puedeGestionar} /></div>
                 <div className="field"><label>Teléfono</label><input value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} disabled={!puedeGestionar} /></div>
+                <div className="field"><label>Fecha de ingreso</label><input type="date" value={edit.enrollmentDate} onChange={(e) => setEdit({ ...edit, enrollmentDate: e.target.value })} disabled={!puedeGestionar} /></div>
                 <div className="field">
                   <label>Curso</label>
                   <select value={edit.courseId} onChange={(e) => setEdit({ ...edit, courseId: e.target.value })} disabled={!puedeGestionar}>
