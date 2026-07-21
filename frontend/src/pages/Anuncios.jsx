@@ -4,7 +4,7 @@ import AreaChip from '../components/AreaChip.jsx';
 import { conectarSocket } from '../socket';
 import { useAuth } from '../context/AuthContext';
 
-const MAX_IMAGEN_MB = 3;
+const MAX_IMAGEN_MB = 10;
 
 export default function Anuncios() {
   const { user } = useAuth();
