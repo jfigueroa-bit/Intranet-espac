@@ -2,12 +2,6 @@ import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useChatUnread } from '../context/ChatUnreadContext.jsx';
 
-// Los módulos marcados como "proximo" se agregarán en las siguientes fases
-// del proyecto. Ya están aquí para que se vea la estructura final completa.
-const proximamente = [
-  'Solicitudes',
-];
-
 export default function Sidebar() {
   const { user, logout } = useAuth();
   const { unreadCount } = useChatUnread();
@@ -37,6 +31,7 @@ export default function Sidebar() {
 
       <NavLink to="/alumnos">Alumnos</NavLink>
       <NavLink to="/programaciones">Programaciones</NavLink>
+      <NavLink to="/solicitudes">Solicitudes</NavLink>
 
       {(user?.role === 'ADMIN' || user?.role === 'RRHH') && (
         <NavLink to="/horarios">Horarios</NavLink>
@@ -49,13 +44,6 @@ export default function Sidebar() {
           <NavLink to="/admin/areas">Áreas / Tags</NavLink>
         </>
       )}
-
-      <div style={{ fontSize: 11, opacity: 0.55, margin: '16px 8px 4px' }}>PRÓXIMAMENTE</div>
-      {proximamente.map((m) => (
-        <span key={m} style={{ padding: '10px 12px', fontSize: 14, opacity: 0.45 }}>
-          {m}
-        </span>
-      ))}
 
       <div style={{ marginTop: 'auto' }}>
         <button className="btn secondary" style={{ width: '100%' }} onClick={logout}>
