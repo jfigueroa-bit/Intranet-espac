@@ -27,4 +27,12 @@ async function notificar({ userId, type, title, message, link = null }) {
   return noti;
 }
 
-module.exports = { setIO, salaDeUsuario, notificar };
+// Manda cualquier evento en tiempo real a un usuario puntual, sin crear una
+// notificación guardada (se usa para el chat: el mensaje ya se guarda aparte).
+function emitirAUsuario(userId, evento, payload) {
+  if (ioInstance) {
+    ioInstance.to(salaDeUsuario(userId)).emit(evento, payload);
+  }
+}
+
+module.exports = { setIO, salaDeUsuario, notificar, emitirAUsuario };
