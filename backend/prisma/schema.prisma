@@ -319,6 +319,7 @@ model Student {
   phone             String?
   courseId          Int?
   course            Course?  @relation(fields: [courseId], references: [id])
+  enrollmentDate    DateTime @default(now()) // fecha de ingreso/matrícula (editable, distinta de createdAt)
   groundCourseHours Float    @default(0) // horas de curso en tierra
   flightHours       Float    @default(0) // horas de vuelo
   simulatorHours    Float    @default(0) // horas de simulador
