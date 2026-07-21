@@ -1,7 +1,7 @@
 const express = require('express');
 const prisma = require('../lib/prisma');
 const { requireAuth } = require('../middleware/auth');
-const { emitirAUsuario } = require('../utils/socket');
+const { emitirAUsuario, notificar } = require('../utils/socket');
 const { sincronizarChatsDeArea } = require('../utils/chatSync');
 
 const router = express.Router();
@@ -136,9 +136,25 @@ router.post('/:id/mensajes', requireAuth, async (req, res) => {
     include: { sender: { select: PERSONA_INFO } },
   });
 
+  const conversacion = await prisma.conversation.findUnique({ where: { id }, include: { area: true } });
+  const nombreChat = conversacion.type === 'AREA'
+    ? `el chat de ${conversacion.area?.name || 'tu área'}`
+    : `${mensaje.sender.firstName} ${mensaje.sender.lastName}`;
+
   const participantes = await prisma.conversationParticipant.findMany({ where: { conversationId: id } });
   participantes.forEach((p) => {
     emitirAUsuario(p.userId, 'chat:mensaje', { conversationId: id, mensaje });
+    if (p.userId !== req.user.id) {
+      notificar({
+        userId: p.userId,
+        type: 'CHAT',
+        title: conversacion.type === 'AREA' ? `Nuevo mensaje en ${conversacion.area?.name || 'tu área'}` : 'Nuevo mensaje',
+        message: conversacion.type === 'AREA'
+          ? `${mensaje.sender.firstName} ${mensaje.sender.lastName}: ${mensaje.content || '📎 Archivo'}`
+          : `${nombreChat}: ${mensaje.content || '📎 Archivo'}`,
+        link: '/chat',
+      });
+    }
   });
 
   res.status(201).json(mensaje);
