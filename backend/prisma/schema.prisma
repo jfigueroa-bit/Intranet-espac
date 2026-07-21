@@ -90,6 +90,8 @@ model User {
   mensajesEnviados     ChatMessage[]
   sesionesComoInstructor ScheduleSession[] @relation("SesionesComoInstructor")
   sesionesCreadas        ScheduleSession[] @relation("SesionesCreadas")
+  solicitudesCreadas     Request[] @relation("SolicitudesCreadas")
+  solicitudesRecibidas   Request[] @relation("SolicitudesRecibidas")
 }
 
 model Announcement {
@@ -349,4 +351,24 @@ model ScheduleSession {
   createdById  Int
   createdBy    User     @relation("SesionesCreadas", fields: [createdById], references: [id])
   createdAt    DateTime @default(now())
+}
+
+// Solicitud interna: cualquiera le puede pedir algo a cualquiera. Quien la
+// recibe (assignee) es quien la mueve de estado; quien la creó (requester)
+// solo hace seguimiento.
+model Request {
+  id           Int       @id @default(autoincrement())
+  title        String
+  description  String?   @db.Text
+  status       String    @default("PENDIENTE") // PENDIENTE | EN_PROCESO | COMPLETADA | RECHAZADA
+  requesterId  Int
+  requester    User      @relation("SolicitudesCreadas", fields: [requesterId], references: [id])
+  assigneeId   Int
+  assignee     User      @relation("SolicitudesRecibidas", fields: [assigneeId], references: [id])
+  fileData     String?   @db.Text // archivo adjunto opcional, en base64
+  fileName     String?
+  mimeType     String?
+  responseNote String?   // comentario al resolver/rechazar
+  createdAt    DateTime  @default(now())
+  resolvedAt   DateTime?
 }
