@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { useChatUnread } from '../context/ChatUnreadContext.jsx';
 import { conectarSocket } from '../socket';
 import AreaChip from '../components/AreaChip.jsx';
 
@@ -22,6 +23,7 @@ function estiloEnlaceArchivo(tieneTexto, esMio) {
 
 export default function Chat() {
   const { user } = useAuth();
+  const { refrescarNoLeidos } = useChatUnread();
   const [conversaciones, setConversaciones] = useState([]);
   const [activaId, setActivaId] = useState(null);
   const [mensajes, setMensajes] = useState([]);
@@ -45,6 +47,7 @@ export default function Chat() {
         setActivaId((idActual) => {
           if (idActual === payload.conversationId) {
             setMensajes((prev) => [...prev, payload.mensaje]);
+            api.patch(`/chats/${payload.conversationId}/leido`).then(() => refrescarNoLeidos());
           }
           return idActual;
         });
@@ -68,6 +71,9 @@ export default function Chat() {
     setMostrarNuevo(false);
     const { data } = await api.get(`/chats/${id}/mensajes`);
     setMensajes(data);
+    await api.patch(`/chats/${id}/leido`);
+    setConversaciones((prev) => prev.map((c) => (c.id === id ? { ...c, unread: false } : c)));
+    refrescarNoLeidos();
   }
 
   async function iniciarChatDirecto(otroUserId) {
@@ -158,11 +164,16 @@ export default function Chat() {
                 background: activaId === c.id ? '#f5f7ff' : 'transparent',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600 }}>
-                {c.type === 'AREA' && c.area ? <AreaChip area={c.area} /> : nombreConversacion(c)}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, overflow: 'hidden' }}>
+                  {c.type === 'AREA' && c.area ? <AreaChip area={c.area} /> : nombreConversacion(c)}
+                </div>
+                {c.unread && (
+                  <span style={{ width: 9, height: 9, borderRadius: '50%', background: 'var(--danger)', flexShrink: 0 }} />
+                )}
               </div>
               {c.lastMessage && (
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <div style={{ fontSize: 12, color: c.unread ? 'var(--text)' : 'var(--text-muted)', fontWeight: c.unread ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {c.lastMessage.sender.firstName}: {c.lastMessage.content || '📎 Archivo'}
                 </div>
               )}
