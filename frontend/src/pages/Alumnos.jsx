@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import * as XLSX from 'xlsx';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { COLOR_TIPO_SESION, LABEL_TIPO_SESION } from '../utils/programaciones';
 
 // Convierte encabezados de Excel en español/inglés, con o sin tildes, a nuestras claves internas
 function normalizar(texto) {
@@ -44,6 +45,7 @@ export default function Alumnos() {
   const esAdmin = user?.role === 'ADMIN';
   const puedeGestionar = ['ADMIN', 'GERENCIA', 'VENTAS'].includes(user?.role);
   const puedeEditarHoras = puedeGestionar || user?.role === 'INSTRUCTOR';
+  const puedeGestionarProgramaciones = ['ADMIN', 'GERENCIA', 'INSTRUCTOR'].includes(user?.role);
 
   const [tab, setTab] = useState('lista');
   const [alumnos, setAlumnos] = useState([]);
@@ -62,6 +64,9 @@ export default function Alumnos() {
   const [resultadoImport, setResultadoImport] = useState(null);
 
   const [nuevoCurso, setNuevoCurso] = useState('');
+
+  const [sesionesAlumno, setSesionesAlumno] = useState([]);
+  const [cargandoSesiones, setCargandoSesiones] = useState(false);
 
   useEffect(() => { cargarCursos(); }, []);
   useEffect(() => { cargarAlumnos(); }, [busqueda]);
@@ -87,6 +92,23 @@ export default function Alumnos() {
       notes: alumno.notes || '',
     });
     setError('');
+    cargarSesionesAlumno(alumno.id);
+  }
+
+  async function cargarSesionesAlumno(studentId) {
+    setCargandoSesiones(true);
+    try {
+      const { data } = await api.get('/schedules', { params: { studentId } });
+      setSesionesAlumno(data);
+    } finally {
+      setCargandoSesiones(false);
+    }
+  }
+
+  async function eliminarSesionAlumno(id) {
+    if (!confirm('¿Eliminar esta sesión programada? Se notificará al instructor.')) return;
+    await api.delete(`/schedules/${id}`);
+    cargarSesionesAlumno(seleccionado.id);
   }
 
   async function guardarFicha() {
@@ -316,6 +338,35 @@ export default function Alumnos() {
                 <div className="field"><label>Horas de vuelo</label><input type="number" step="0.5" value={edit.flightHours} onChange={(e) => setEdit({ ...edit, flightHours: e.target.value })} disabled={!puedeEditarHoras} /></div>
                 <div className="field"><label>Horas de simulador</label><input type="number" step="0.5" value={edit.simulatorHours} onChange={(e) => setEdit({ ...edit, simulatorHours: e.target.value })} disabled={!puedeEditarHoras} /></div>
                 <div className="field"><label>Notas</label><textarea rows={3} value={edit.notes} onChange={(e) => setEdit({ ...edit, notes: e.target.value })} disabled={!puedeGestionar} /></div>
+              </div>
+
+              <div style={{ borderTop: '1px solid var(--border)', marginTop: 14, paddingTop: 12 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Programaciones</div>
+                {cargandoSesiones && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Cargando...</div>}
+                {!cargandoSesiones && sesionesAlumno.length === 0 && (
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Este alumno no tiene sesiones programadas.</div>
+                )}
+                {!cargandoSesiones && sesionesAlumno.map((s) => (
+                  <div key={s.id} style={{ marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: COLOR_TIPO_SESION[s.type], display: 'inline-block' }} />
+                      <strong style={{ fontSize: 12 }}>{LABEL_TIPO_SESION[s.type]}</strong>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        {new Date(s.date).toLocaleDateString('es-PE', { day: 'numeric', month: 'short', timeZone: 'UTC' })}, {s.startTime}–{s.endTime}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 12, marginTop: 2 }}>Instructor: {s.instructor.firstName} {s.instructor.lastName}</div>
+                    {puedeGestionarProgramaciones && (
+                      <button
+                        className="btn danger"
+                        style={{ padding: '2px 8px', fontSize: 10, marginTop: 4 }}
+                        onClick={() => eliminarSesionAlumno(s.id)}
+                      >
+                        Eliminar
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
 
               {error && <div className="error-text">{error}</div>}
