@@ -30,7 +30,7 @@ const server = http.createServer(app);
 const FRONTEND_URL = process.env.FRONTEND_URL || '*';
 
 app.use(cors({ origin: FRONTEND_URL }));
-app.use(express.json({ limit: '15mb' }));
+app.use(express.json({ limit: '20mb' }));
 
 app.get('/api/health', (req, res) => res.json({ ok: true, service: 'intranet-espac-backend' }));
 
