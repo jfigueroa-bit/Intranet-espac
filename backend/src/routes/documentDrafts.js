@@ -147,7 +147,7 @@ router.post('/:id/firmar', requireAuth, async (req, res) => {
     userId: draft.createdById,
     type: 'FIRMA',
     title: 'Firma registrada',
-    message: `${req.user.username} ya firmó "${draft.title}".`,
+    message: `${miFirma.user.firstName} ${miFirma.user.lastName} ya firmó "${draft.title}".`,
     link: '/documentos',
   });
 
