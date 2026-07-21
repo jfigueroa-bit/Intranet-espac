@@ -6,7 +6,6 @@ import { useChatUnread } from '../context/ChatUnreadContext.jsx';
 // del proyecto. Ya están aquí para que se vea la estructura final completa.
 const proximamente = [
   'Programaciones',
-  'Alumnos',
   'Solicitudes',
 ];
 
@@ -36,6 +35,8 @@ export default function Sidebar() {
           </span>
         )}
       </NavLink>
+
+      <NavLink to="/alumnos">Alumnos</NavLink>
 
       {(user?.role === 'ADMIN' || user?.role === 'RRHH') && (
         <NavLink to="/horarios">Horarios</NavLink>
