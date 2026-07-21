@@ -21,6 +21,7 @@ const chatsRoutes = require('./routes/chats');
 const coursesRoutes = require('./routes/courses');
 const studentsRoutes = require('./routes/students');
 const schedulesRoutes = require('./routes/schedules');
+const requestsRoutes = require('./routes/requests');
 const { setIO, salaDeUsuario } = require('./utils/socket');
 
 const app = express();
@@ -48,6 +49,7 @@ app.use('/api/chats', chatsRoutes);
 app.use('/api/courses', coursesRoutes);
 app.use('/api/students', studentsRoutes);
 app.use('/api/schedules', schedulesRoutes);
+app.use('/api/requests', requestsRoutes);
 
 // Manejador de errores general: si una ruta falla sin haberlo previsto,
 // devolvemos un mensaje claro en vez de que el navegador reciba una
