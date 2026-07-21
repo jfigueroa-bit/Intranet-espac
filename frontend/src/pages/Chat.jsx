@@ -46,7 +46,7 @@ export default function Chat() {
       socket.on('chat:mensaje', (payload) => {
         setActivaId((idActual) => {
           if (idActual === payload.conversationId) {
-            setMensajes((prev) => [...prev, payload.mensaje]);
+            agregarMensajeSinDuplicar(payload.mensaje);
             api.patch(`/chats/${payload.conversationId}/leido`).then(() => refrescarNoLeidos());
           }
           return idActual;
@@ -56,6 +56,10 @@ export default function Chat() {
     }
     return () => socket?.off('chat:mensaje');
   }, []);
+
+  function agregarMensajeSinDuplicar(mensaje) {
+    setMensajes((prev) => (prev.some((m) => m.id === mensaje.id) ? prev : [...prev, mensaje]));
+  }
 
   useEffect(() => {
     finMensajesRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -111,7 +115,7 @@ export default function Chat() {
         fileName: archivoNombre || null,
         mimeType,
       });
-      setMensajes((prev) => [...prev, data]);
+      setMensajes((prev) => (prev.some((m) => m.id === data.id) ? prev : [...prev, data]));
       setTexto('');
       setArchivo(null);
       setArchivoNombre('');
