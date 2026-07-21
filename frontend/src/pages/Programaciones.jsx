@@ -2,14 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { MESES, DIAS_SEMANA, aFechaLocal, generarMes } from '../utils/calendario';
-
-const TIPOS = [
-  { value: 'TEORIA', label: 'Teoría', color: '#2952cc' },
-  { value: 'SIMULADOR', label: 'Simulador', color: '#7b3fa0' },
-  { value: 'VUELO', label: 'Vuelo', color: '#2e7d32' },
-];
-const COLOR_TIPO = Object.fromEntries(TIPOS.map((t) => [t.value, t.color]));
-const LABEL_TIPO = Object.fromEntries(TIPOS.map((t) => [t.value, t.label]));
+import { TIPOS_SESION as TIPOS, COLOR_TIPO_SESION as COLOR_TIPO, LABEL_TIPO_SESION as LABEL_TIPO } from '../utils/programaciones';
 
 export default function Programaciones() {
   const { user } = useAuth();
