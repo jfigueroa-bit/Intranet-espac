@@ -18,6 +18,8 @@ const documentTemplatesRoutes = require('./routes/documentTemplates');
 const documentDraftsRoutes = require('./routes/documentDrafts');
 const vacationsRoutes = require('./routes/vacations');
 const chatsRoutes = require('./routes/chats');
+const coursesRoutes = require('./routes/courses');
+const studentsRoutes = require('./routes/students');
 const { setIO, salaDeUsuario } = require('./utils/socket');
 
 const app = express();
@@ -42,6 +44,8 @@ app.use('/api/document-templates', documentTemplatesRoutes);
 app.use('/api/document-drafts', documentDraftsRoutes);
 app.use('/api/vacations', vacationsRoutes);
 app.use('/api/chats', chatsRoutes);
+app.use('/api/courses', coursesRoutes);
+app.use('/api/students', studentsRoutes);
 
 // Manejador de errores general: si una ruta falla sin haberlo previsto,
 // devolvemos un mensaje claro en vez de que el navegador reciba una
