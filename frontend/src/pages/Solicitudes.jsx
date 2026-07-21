@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
 
-const MAX_ARCHIVO_MB = 5;
+const MAX_ARCHIVO_MB = 10;
 const ESTADO_LABEL = { PENDIENTE: 'Pendiente', EN_PROCESO: 'En proceso', COMPLETADA: 'Completada', RECHAZADA: 'Rechazada' };
 const ESTADO_COLOR = { PENDIENTE: '#c9a227', EN_PROCESO: '#2952cc', COMPLETADA: '#2e7d32', RECHAZADA: '#b3261e' };
 
