@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useChatUnread } from '../context/ChatUnreadContext.jsx';
 import { conectarSocket } from '../socket';
 import AreaChip from '../components/AreaChip.jsx';
+import { conEnlacesClickeables } from '../utils/enlaces.jsx';
 
-const MAX_ARCHIVO_MB = 5;
+const MAX_ARCHIVO_MB = 10;
 const EMOJIS = ['😀', '😂', '😍', '👍', '🙏', '🎉', '😢', '😮', '🔥', '❤️', '👏', '🤔'];
 
 function estiloImagenChat(tieneTexto) {
@@ -24,6 +26,7 @@ function estiloEnlaceArchivo(tieneTexto, esMio) {
 export default function Chat() {
   const { user } = useAuth();
   const { refrescarNoLeidos } = useChatUnread();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [conversaciones, setConversaciones] = useState([]);
   const [activaId, setActivaId] = useState(null);
   const [mensajes, setMensajes] = useState([]);
@@ -68,6 +71,12 @@ export default function Chat() {
   async function cargarConversaciones() {
     const { data } = await api.get('/chats');
     setConversaciones(data);
+
+    const idDeUrl = searchParams.get('c');
+    if (idDeUrl) {
+      abrirConversacion(Number(idDeUrl));
+      setSearchParams({}, { replace: true });
+    }
   }
 
   async function abrirConversacion(id) {
@@ -216,7 +225,7 @@ export default function Chat() {
                       background: esMio ? 'var(--primary)' : '#f0f0f2', color: esMio ? '#fff' : 'var(--text)',
                       borderRadius: 12, padding: '8px 12px', fontSize: 14, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
                     }}>
-                      {m.content}
+                      {conEnlacesClickeables(m.content)}
                       {m.fileData && esImagen(m.mimeType) && (
                         <img src={m.fileData} alt={m.fileName} style={estiloImagenChat(m.content)} />
                       )}
