@@ -88,6 +88,8 @@ model User {
   vacacionesDecididas  VacationRequest[] @relation("VacacionesDecididas")
   chatParticipaciones  ConversationParticipant[]
   mensajesEnviados     ChatMessage[]
+  sesionesComoInstructor ScheduleSession[] @relation("SesionesComoInstructor")
+  sesionesCreadas        ScheduleSession[] @relation("SesionesCreadas")
 }
 
 model Announcement {
@@ -327,4 +329,24 @@ model Student {
   isActive          Boolean  @default(true)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+
+  sessions ScheduleSession[]
+}
+
+// Una sesión programada: clase de teoría, simulador, o vuelo. La agenda el
+// capitán del área (o Admin/Gerencia), y se notifica al instructor asignado.
+model ScheduleSession {
+  id           Int      @id @default(autoincrement())
+  type         String   // TEORIA | SIMULADOR | VUELO
+  date         DateTime // solo el día
+  startTime    String   // "HH:MM"
+  endTime      String   // "HH:MM"
+  studentId    Int
+  student      Student  @relation(fields: [studentId], references: [id])
+  instructorId Int
+  instructor   User     @relation("SesionesComoInstructor", fields: [instructorId], references: [id])
+  notes        String?
+  createdById  Int
+  createdBy    User     @relation("SesionesCreadas", fields: [createdById], references: [id])
+  createdAt    DateTime @default(now())
 }
