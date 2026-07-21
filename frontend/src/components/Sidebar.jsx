@@ -5,7 +5,6 @@ import { useChatUnread } from '../context/ChatUnreadContext.jsx';
 // Los módulos marcados como "proximo" se agregarán en las siguientes fases
 // del proyecto. Ya están aquí para que se vea la estructura final completa.
 const proximamente = [
-  'Programaciones',
   'Solicitudes',
 ];
 
@@ -37,6 +36,7 @@ export default function Sidebar() {
       </NavLink>
 
       <NavLink to="/alumnos">Alumnos</NavLink>
+      <NavLink to="/programaciones">Programaciones</NavLink>
 
       {(user?.role === 'ADMIN' || user?.role === 'RRHH') && (
         <NavLink to="/horarios">Horarios</NavLink>
