@@ -59,6 +59,7 @@ model User {
   role                Role       @default(EMPLEADO)
   cargo               String?    // puesto (ej: "Asesora de Ventas")
   signatureData       String?    @db.Text // firma digital guardada (imagen en base64)
+profilePhoto        String?    @db.Text // foto de perfil (imagen en base64)
   schedule            Json       @default("[]") // horario semanal: [{ day, active, start, end }]
   scheduleNote        String?    // nota adicional opcional (ej: "Turno rotativo cada 2 semanas")
   workStatus          WorkStatus @default(PRESENCIAL)
