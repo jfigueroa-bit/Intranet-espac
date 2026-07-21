@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../api/client';
 import { conectarSocket } from '../socket';
+import { reproducirSonidoNotificacion } from '../utils/sonido';
 
 export default function NotificationBell() {
+  const navigate = useNavigate();
   const [abierto, setAbierto] = useState(false);
   const [notis, setNotis] = useState([]);
 
@@ -12,6 +15,7 @@ export default function NotificationBell() {
     if (socket) {
       socket.on('notificacion:nueva', (noti) => {
         setNotis((prev) => [noti, ...prev]);
+        reproducirSonidoNotificacion();
       });
     }
     return () => socket?.off('notificacion:nueva');
@@ -22,21 +26,27 @@ export default function NotificationBell() {
     setNotis(data);
   }
 
-  async function marcarLeida(id) {
-    await api.patch(`/notifications/${id}/leer`);
-    setNotis((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+  // Al abrir la campana, se marca todo como leído de una — así ya no hay que
+  // ir clic por clic para que desaparezca la bolita.
+  async function alternarAbierto() {
+    const abriendola = !abierto;
+    setAbierto(abriendola);
+    if (abriendola && notis.some((n) => !n.read)) {
+      setNotis((prev) => prev.map((n) => ({ ...n, read: true })));
+      await api.patch('/notifications/leer-todas');
+    }
   }
 
-  async function marcarTodasLeidas() {
-    await api.patch('/notifications/leer-todas');
-    setNotis((prev) => prev.map((n) => ({ ...n, read: true })));
+  function irAlLugar(n) {
+    setAbierto(false);
+    if (n.link) navigate(n.link);
   }
 
   const noLeidas = notis.filter((n) => !n.read).length;
 
   return (
     <div style={{ position: 'relative' }}>
-      <button className="notif-bell" onClick={() => setAbierto((v) => !v)}>
+      <button className="notif-bell" onClick={alternarAbierto}>
         🔔
         {noLeidas > 0 && <span className="notif-dot">{noLeidas}</span>}
       </button>
@@ -45,12 +55,6 @@ export default function NotificationBell() {
         <div className="notif-panel">
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid var(--border)' }}>
             <strong style={{ fontSize: 13 }}>Notificaciones</strong>
-            <button
-              onClick={marcarTodasLeidas}
-              style={{ background: 'none', border: 'none', color: 'var(--primary-light)', fontSize: 12 }}
-            >
-              Marcar todas leídas
-            </button>
           </div>
 
           {notis.length === 0 && (
@@ -62,8 +66,9 @@ export default function NotificationBell() {
           {notis.map((n) => (
             <div
               key={n.id}
-              className={`notif-item ${n.read ? '' : 'unread'}`}
-              onClick={() => !n.read && marcarLeida(n.id)}
+              className="notif-item"
+              onClick={() => irAlLugar(n)}
+              style={{ cursor: n.link ? 'pointer' : 'default' }}
             >
               <div className="titulo">{n.title}</div>
               <div>{n.message}</div>
