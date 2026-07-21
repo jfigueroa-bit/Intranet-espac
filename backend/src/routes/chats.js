@@ -31,12 +31,15 @@ router.get('/', requireAuth, async (req, res) => {
   const conversaciones = participaciones.map((p) => {
     const c = p.conversation;
     const otro = c.type === 'DIRECT' ? c.participants.map((x) => x.user).find((u) => u.id !== req.user.id) : null;
+    const ultimo = c.messages[0] || null;
+    const noLeido = !!ultimo && ultimo.sender.id !== req.user.id && (!p.lastReadAt || new Date(ultimo.createdAt) > new Date(p.lastReadAt));
     return {
       id: c.id,
       type: c.type,
       area: c.area,
       otherUser: otro,
-      lastMessage: c.messages[0] || null,
+      lastMessage: ultimo,
+      unread: noLeido,
     };
   });
 
@@ -74,6 +77,21 @@ router.post('/directo', requireAuth, async (req, res) => {
     },
   });
   res.status(201).json({ id: nueva.id });
+});
+
+// PATCH /api/chats/:id/leido -> marca que ya vi los mensajes de este chat hasta ahora
+router.patch('/:id/leido', requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  const soyParticipante = await prisma.conversationParticipant.findUnique({
+    where: { conversationId_userId: { conversationId: id, userId: req.user.id } },
+  });
+  if (!soyParticipante) return res.status(403).json({ error: 'No tienes acceso a este chat' });
+
+  await prisma.conversationParticipant.update({
+    where: { id: soyParticipante.id },
+    data: { lastReadAt: new Date() },
+  });
+  res.json({ ok: true });
 });
 
 // GET /api/chats/:id/mensajes -> historial (solo si soy participante)
