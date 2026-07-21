@@ -10,6 +10,7 @@ import Documentos from './pages/Documentos.jsx';
 import Vacaciones from './pages/Vacaciones.jsx';
 import Chat from './pages/Chat.jsx';
 import Alumnos from './pages/Alumnos.jsx';
+import Programaciones from './pages/Programaciones.jsx';
 import Usuarios from './pages/admin/Usuarios.jsx';
 import Areas from './pages/admin/Areas.jsx';
 import Horarios from './pages/Horarios.jsx';
@@ -44,6 +45,7 @@ export default function App() {
         <Route path="vacaciones" element={<Vacaciones />} />
         <Route path="chat" element={<Chat />} />
         <Route path="alumnos" element={<Alumnos />} />
+        <Route path="programaciones" element={<Programaciones />} />
         <Route
           path="admin/usuarios"
           element={
