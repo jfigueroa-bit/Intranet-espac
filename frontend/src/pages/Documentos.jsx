@@ -4,8 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { construirDocumentoHTML, reemplazarTokens, slugify } from '../utils/documentoHTML';
 import FirmaCanvas from '../components/FirmaCanvas.jsx';
 
-const MAX_DOC_MB = 5;
-const MAX_IMG_MB = 3;
+const MAX_DOC_MB = 10;
+const MAX_IMG_MB = 10;
 
 export default function Documentos() {
   const { user } = useAuth();
