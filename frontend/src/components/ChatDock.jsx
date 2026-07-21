@@ -8,6 +8,7 @@ import { conEnlacesClickeables } from '../utils/enlaces.jsx';
 import AreaChip from './AreaChip.jsx';
 
 const MAX_ARCHIVO_MB = 10;
+const EMOJIS = ['😀', '😂', '😍', '👍', '🙏', '🎉', '😢', '😮', '🔥', '❤️', '👏', '🤔'];
 
 function nombreConversacion(c) {
   if (!c) return '';
@@ -39,6 +40,7 @@ export default function ChatDock() {
   const [archivoNombre, setArchivoNombre] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState('');
+  const [mostrarEmojis, setMostrarEmojis] = useState(false);
   const finRef = useRef(null);
 
   const conversacionActiva = conversaciones.find((c) => c.id === conversacionId) || null;
@@ -75,6 +77,7 @@ export default function ChatDock() {
   function volverALista() {
     setConversacionId(null);
     setMensajes([]);
+    setMostrarEmojis(false);
   }
 
   function irAPaginaCompleta() {
@@ -207,7 +210,25 @@ export default function ChatDock() {
                 </div>
               )}
 
+              {mostrarEmojis && (
+                <div style={{ padding: '6px 12px', display: 'flex', gap: 6, flexWrap: 'wrap', borderTop: '1px solid var(--border)' }}>
+                  {EMOJIS.map((e) => (
+                    <button
+                      key={e}
+                      type="button"
+                      onClick={() => setTexto((t) => t + e)}
+                      style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer' }}
+                    >
+                      {e}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <form onSubmit={enviar} style={{ display: 'flex', gap: 6, padding: 10, borderTop: '1px solid var(--border)', alignItems: 'center' }}>
+                <button type="button" onClick={() => setMostrarEmojis((v) => !v)} style={{ background: 'none', border: 'none', fontSize: 17, cursor: 'pointer', padding: 0 }}>
+                  😊
+                </button>
                 <label style={{ cursor: 'pointer', fontSize: 17 }}>
                   📎
                   <input type="file" onChange={elegirArchivo} style={{ display: 'none' }} />
