@@ -283,6 +283,7 @@ model ConversationParticipant {
   userId         Int
   user           User         @relation(fields: [userId], references: [id])
   joinedAt       DateTime     @default(now())
+  lastReadAt     DateTime?    // hasta qué momento ya vio los mensajes de este chat
 
   @@unique([conversationId, userId])
 }
