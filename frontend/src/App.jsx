@@ -8,6 +8,7 @@ import Anuncios from './pages/Anuncios.jsx';
 import Calendario from './pages/Calendario.jsx';
 import Documentos from './pages/Documentos.jsx';
 import Vacaciones from './pages/Vacaciones.jsx';
+import Chat from './pages/Chat.jsx';
 import Usuarios from './pages/admin/Usuarios.jsx';
 import Areas from './pages/admin/Areas.jsx';
 import Horarios from './pages/Horarios.jsx';
@@ -40,6 +41,7 @@ export default function App() {
         <Route path="compania" element={<Compania />} />
         <Route path="documentos" element={<Documentos />} />
         <Route path="vacaciones" element={<Vacaciones />} />
+        <Route path="chat" element={<Chat />} />
         <Route
           path="admin/usuarios"
           element={
