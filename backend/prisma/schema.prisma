@@ -300,3 +300,30 @@ model ChatMessage {
   mimeType       String?
   createdAt      DateTime     @default(now())
 }
+
+// Cursos que ofrece ESPAC (ej: "Piloto Privado", "Piloto Comercial"). Solo Admin los crea.
+model Course {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique
+  createdAt DateTime  @default(now())
+  students  Student[]
+}
+
+model Student {
+  id                Int      @id @default(autoincrement())
+  sequenceNumber    Int      @unique // usado para generar el código (00001, 00002...)
+  code              String   @unique // ej: ESPAC-00001
+  firstName         String
+  lastName          String
+  email             String?
+  phone             String?
+  courseId          Int?
+  course            Course?  @relation(fields: [courseId], references: [id])
+  groundCourseHours Float    @default(0) // horas de curso en tierra
+  flightHours       Float    @default(0) // horas de vuelo
+  simulatorHours    Float    @default(0) // horas de simulador
+  notes             String?
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
