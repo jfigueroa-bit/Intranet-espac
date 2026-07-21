@@ -53,7 +53,7 @@ router.post('/', requireAuth, requireRole('ADMIN', 'GERENCIA', 'VENTAS'), async 
       lastName: lastName.trim(),
       email: email || null,
       phone: phone || null,
-      courseId: courseId || null,
+      courseId: courseId ? Number(courseId) : null,
       notes: notes || null,
     },
     include: INCLUIR,
@@ -133,7 +133,7 @@ router.patch('/:id', requireAuth, requireRole('ADMIN', 'GERENCIA', 'VENTAS', 'IN
   if (lastName !== undefined) data.lastName = lastName;
   if (email !== undefined) data.email = email || null;
   if (phone !== undefined) data.phone = phone || null;
-  if (courseId !== undefined) data.courseId = courseId || null;
+  if (courseId !== undefined) data.courseId = courseId ? Number(courseId) : null;
   if (groundCourseHours !== undefined) data.groundCourseHours = Number(groundCourseHours) || 0;
   if (flightHours !== undefined) data.flightHours = Number(flightHours) || 0;
   if (simulatorHours !== undefined) data.simulatorHours = Number(simulatorHours) || 0;
