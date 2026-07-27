@@ -63,6 +63,11 @@ export default function Usuarios() {
     cargar();
   }
 
+  async function alternarVerPagos(u) {
+    await api.patch(`/users/${u.id}`, { canViewPayments: !u.canViewPayments });
+    cargar();
+  }
+
   function empezarEdicion(u) {
     setEditandoId(u.id);
     setCredencialReset(null);
@@ -161,6 +166,10 @@ export default function Usuarios() {
 
       <div className="card">
         <h3 style={{ marginTop: 0 }}>Listado de usuarios</h3>
+        <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+          La columna "Ver pagos" es un permiso individual: le da acceso a la información de cuotas/pagos
+          de Alumnos a esa persona en particular, sin importar su rol. Admin y Gerencia siempre tienen acceso.
+        </p>
         <table>
           <thead>
             <tr>
@@ -171,6 +180,7 @@ export default function Usuarios() {
               <th>Rol</th>
               <th>Áreas</th>
               <th>Jefe directo</th>
+              <th>Ver pagos</th>
               <th></th>
             </tr>
           </thead>
@@ -212,6 +222,7 @@ export default function Usuarios() {
                       title="Orden dentro de su mismo nivel (menor número aparece primero)"
                     />
                   </td>
+                  <td>—</td>
                   <td>
                     <div style={{ display: 'flex', gap: 4 }}>
                       <button className="btn" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => guardarEdicion(u.id)}>Guardar</button>
@@ -233,6 +244,13 @@ export default function Usuarios() {
                   <td>{u.areas.map((a) => <AreaChip key={a.area.id} area={a.area} />)}</td>
                   <td style={{ fontSize: 13 }}>
                     {u.managerId ? (usuarios.find((o) => o.id === u.managerId)?.firstName + ' ' + usuarios.find((o) => o.id === u.managerId)?.lastName) : '—'}
+                  </td>
+                  <td style={{ textAlign: 'center' }}>
+                    {['ADMIN', 'GERENCIA'].includes(u.role) ? (
+                      <span title="Siempre tiene acceso por su rol" style={{ fontSize: 11, color: 'var(--text-muted)' }}>Siempre</span>
+                    ) : (
+                      <input type="checkbox" checked={!!u.canViewPayments} onChange={() => alternarVerPagos(u)} />
+                    )}
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
