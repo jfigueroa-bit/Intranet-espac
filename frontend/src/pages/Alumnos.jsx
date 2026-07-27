@@ -96,8 +96,25 @@ export default function Alumnos() {
   const [nuevaSesion, setNuevaSesion] = useState({ type: 'TEORIA', instructorId: '', fecha: new Date().toISOString().slice(0, 10), startTime: '09:00', endTime: '10:00', notes: '' });
   const [guardandoSesion, setGuardandoSesion] = useState(false);
 
+  const [aircraftTypes, setAircraftTypes] = useState([]);
+  const [simulatorTypes, setSimulatorTypes] = useState([]);
+  const [nuevoTipoAvion, setNuevoTipoAvion] = useState('');
+  const [nuevoTipoSimulador, setNuevoTipoSimulador] = useState('');
+
+  const [flightLogs, setFlightLogs] = useState([]);
+  const [cargandoFlightLogs, setCargandoFlightLogs] = useState(false);
+  const [mostrarNuevoVuelo, setMostrarNuevoVuelo] = useState(false);
+  const [nuevoVuelo, setNuevoVuelo] = useState({ aircraftTypeId: '', hours: '', date: new Date().toISOString().slice(0, 10), notes: '' });
+
+  const [simulatorLogs, setSimulatorLogs] = useState([]);
+  const [cargandoSimulatorLogs, setCargandoSimulatorLogs] = useState(false);
+  const [mostrarNuevoSimulador, setMostrarNuevoSimulador] = useState(false);
+  const [nuevoSimulador, setNuevoSimulador] = useState({ simulatorTypeId: '', hours: '', date: new Date().toISOString().slice(0, 10), notes: '' });
+
   useEffect(() => {
     cargarCursos();
+    cargarAircraftTypes();
+    cargarSimulatorTypes();
     api.get('/users').then((res) => setInstructores(res.data.filter((u) => u.role === 'INSTRUCTOR')));
     api.get('/auth/me').then((res) => {
       setPuedeVerPagos(res.data.canViewPayments || ['ADMIN', 'GERENCIA'].includes(res.data.role));
@@ -115,6 +132,44 @@ export default function Alumnos() {
     setCursos(data);
   }
 
+  async function cargarAircraftTypes() {
+    const { data } = await api.get('/aircraft-types');
+    setAircraftTypes(data);
+  }
+
+  async function cargarSimulatorTypes() {
+    const { data } = await api.get('/simulator-types');
+    setSimulatorTypes(data);
+  }
+
+  async function crearTipoAvion(e) {
+    e.preventDefault();
+    if (!nuevoTipoAvion.trim()) return;
+    await api.post('/aircraft-types', { name: nuevoTipoAvion });
+    setNuevoTipoAvion('');
+    cargarAircraftTypes();
+  }
+
+  async function eliminarTipoAvion(id) {
+    if (!confirm('¿Eliminar este tipo de avión?')) return;
+    await api.delete(`/aircraft-types/${id}`);
+    cargarAircraftTypes();
+  }
+
+  async function crearTipoSimulador(e) {
+    e.preventDefault();
+    if (!nuevoTipoSimulador.trim()) return;
+    await api.post('/simulator-types', { name: nuevoTipoSimulador });
+    setNuevoTipoSimulador('');
+    cargarSimulatorTypes();
+  }
+
+  async function eliminarTipoSimulador(id) {
+    if (!confirm('¿Eliminar este tipo de simulador?')) return;
+    await api.delete(`/simulator-types/${id}`);
+    cargarSimulatorTypes();
+  }
+
   function abrirFicha(alumno) {
     setSeleccionado(alumno);
     setTabFicha('general');
@@ -129,6 +184,8 @@ export default function Alumnos() {
     setError('');
     cargarSesionesAlumno(alumno.id);
     cargarInscripciones(alumno.id);
+    cargarFlightLogs(alumno.id);
+    cargarSimulatorLogs(alumno.id);
     if (puedeVerPagos) cargarCuotasAlumno(alumno.id);
   }
 
@@ -203,6 +260,74 @@ export default function Alumnos() {
     if (!confirm('¿Quitar este curso del historial del alumno?')) return;
     await api.delete(`/student-courses/${id}`);
     cargarInscripciones(seleccionado.id);
+  }
+
+  async function cargarFlightLogs(studentId) {
+    setCargandoFlightLogs(true);
+    try {
+      const { data } = await api.get('/flight-logs', { params: { studentId } });
+      setFlightLogs(data);
+    } finally {
+      setCargandoFlightLogs(false);
+    }
+  }
+
+  async function registrarVuelo(e) {
+    e.preventDefault();
+    setError('');
+    if (!nuevoVuelo.aircraftTypeId) { setError('Elige el tipo de avión'); return; }
+    try {
+      await api.post('/flight-logs', { ...nuevoVuelo, studentId: seleccionado.id });
+      setEdit((prev) => ({ ...prev, flightHours: Number(prev.flightHours) + Number(nuevoVuelo.hours) }));
+      setNuevoVuelo({ aircraftTypeId: '', hours: '', date: new Date().toISOString().slice(0, 10), notes: '' });
+      setMostrarNuevoVuelo(false);
+      cargarFlightLogs(seleccionado.id);
+      cargarAlumnos();
+    } catch (err) {
+      setError(err.response?.data?.error || 'No se pudo registrar el vuelo');
+    }
+  }
+
+  async function eliminarVuelo(registro) {
+    if (!confirm('¿Eliminar este vuelo del historial? Se restarán esas horas del total.')) return;
+    await api.delete(`/flight-logs/${registro.id}`);
+    setEdit((prev) => ({ ...prev, flightHours: Number(prev.flightHours) - Number(registro.hours) }));
+    cargarFlightLogs(seleccionado.id);
+    cargarAlumnos();
+  }
+
+  async function cargarSimulatorLogs(studentId) {
+    setCargandoSimulatorLogs(true);
+    try {
+      const { data } = await api.get('/simulator-logs', { params: { studentId } });
+      setSimulatorLogs(data);
+    } finally {
+      setCargandoSimulatorLogs(false);
+    }
+  }
+
+  async function registrarSimulador(e) {
+    e.preventDefault();
+    setError('');
+    if (!nuevoSimulador.simulatorTypeId) { setError('Elige el tipo de simulador'); return; }
+    try {
+      await api.post('/simulator-logs', { ...nuevoSimulador, studentId: seleccionado.id });
+      setEdit((prev) => ({ ...prev, simulatorHours: Number(prev.simulatorHours) + Number(nuevoSimulador.hours) }));
+      setNuevoSimulador({ simulatorTypeId: '', hours: '', date: new Date().toISOString().slice(0, 10), notes: '' });
+      setMostrarNuevoSimulador(false);
+      cargarSimulatorLogs(seleccionado.id);
+      cargarAlumnos();
+    } catch (err) {
+      setError(err.response?.data?.error || 'No se pudo registrar la sesión de simulador');
+    }
+  }
+
+  async function eliminarSimulador(registro) {
+    if (!confirm('¿Eliminar esta sesión del historial? Se restarán esas horas del total.')) return;
+    await api.delete(`/simulator-logs/${registro.id}`);
+    setEdit((prev) => ({ ...prev, simulatorHours: Number(prev.simulatorHours) - Number(registro.hours) }));
+    cargarSimulatorLogs(seleccionado.id);
+    cargarAlumnos();
   }
 
   async function cargarCuotasAlumno(studentId) {
@@ -357,7 +482,7 @@ export default function Alumnos() {
         </button>
         {esAdmin && (
           <button className={`btn ${tab === 'cursos' ? '' : 'secondary'}`} style={{ padding: '6px 16px', fontSize: 13 }} onClick={() => setTab('cursos')}>
-            Cursos
+            Catálogos
           </button>
         )}
       </div>
@@ -474,7 +599,7 @@ export default function Alumnos() {
             <button className="btn">Crear curso</button>
           </form>
 
-          <div className="card">
+          <div className="card" style={{ marginBottom: 16 }}>
             <table>
               <thead>
                 <tr><th>Curso</th><th>Alumnos</th><th></th></tr>
@@ -494,6 +619,46 @@ export default function Alumnos() {
                 )}
               </tbody>
             </table>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div>
+              <form onSubmit={crearTipoAvion} className="card" style={{ marginBottom: 16, display: 'flex', gap: 8 }}>
+                <input value={nuevoTipoAvion} onChange={(e) => setNuevoTipoAvion(e.target.value)} placeholder="Ej: Cessna 172" />
+                <button className="btn">Agregar</button>
+              </form>
+              <div className="card">
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Tipos de avión</div>
+                {aircraftTypes.map((t) => (
+                  <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+                    <span style={{ fontSize: 13 }}>{t.name}</span>
+                    <button className="btn danger" style={{ padding: '2px 8px', fontSize: 10 }} onClick={() => eliminarTipoAvion(t.id)}>Eliminar</button>
+                  </div>
+                ))}
+                {aircraftTypes.length === 0 && (
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Todavía no has agregado ningún tipo de avión.</div>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <form onSubmit={crearTipoSimulador} className="card" style={{ marginBottom: 16, display: 'flex', gap: 8 }}>
+                <input value={nuevoTipoSimulador} onChange={(e) => setNuevoTipoSimulador(e.target.value)} placeholder="Ej: Redbird FMX" />
+                <button className="btn">Agregar</button>
+              </form>
+              <div className="card">
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Tipos de simulador</div>
+                {simulatorTypes.map((t) => (
+                  <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+                    <span style={{ fontSize: 13 }}>{t.name}</span>
+                    <button className="btn danger" style={{ padding: '2px 8px', fontSize: 10 }} onClick={() => eliminarTipoSimulador(t.id)}>Eliminar</button>
+                  </div>
+                ))}
+                {simulatorTypes.length === 0 && (
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Todavía no has agregado ningún tipo de simulador.</div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -612,12 +777,106 @@ export default function Alumnos() {
                   </div>
                   <div style={{ display: 'grid', gap: 10 }}>
                     <div className="field"><label>Horas de curso en tierra</label><input type="number" step="0.5" value={edit.groundCourseHours} onChange={(e) => setEdit({ ...edit, groundCourseHours: e.target.value })} disabled={!puedeEditarHoras} /></div>
-                    <div className="field"><label>Horas de vuelo</label><input type="number" step="0.5" value={edit.flightHours} onChange={(e) => setEdit({ ...edit, flightHours: e.target.value })} disabled={!puedeEditarHoras} /></div>
-                    <div className="field"><label>Horas de simulador</label><input type="number" step="0.5" value={edit.simulatorHours} onChange={(e) => setEdit({ ...edit, simulatorHours: e.target.value })} disabled={!puedeEditarHoras} /></div>
+                    <div className="field"><label>Horas de vuelo (total)</label><input type="number" step="0.5" value={edit.flightHours} onChange={(e) => setEdit({ ...edit, flightHours: e.target.value })} disabled={!puedeEditarHoras} /></div>
+                    <div className="field"><label>Horas de simulador (total)</label><input type="number" step="0.5" value={edit.simulatorHours} onChange={(e) => setEdit({ ...edit, simulatorHours: e.target.value })} disabled={!puedeEditarHoras} /></div>
                   </div>
                   {puedeEditarHoras && (
                     <button className="btn" style={{ marginTop: 12 }} disabled={guardando} onClick={guardarFicha}>{guardando ? 'Guardando...' : 'Guardar horas'}</button>
                   )}
+
+                  <div style={{ borderTop: '1px solid var(--border)', marginTop: 18, paddingTop: 14 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>Historial de vuelos</div>
+                      {puedeEditarHoras && !mostrarNuevoVuelo && (
+                        <button className="btn secondary" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => setMostrarNuevoVuelo(true)}>+ Registrar vuelo</button>
+                      )}
+                    </div>
+
+                    {mostrarNuevoVuelo && (
+                      <form onSubmit={registrarVuelo} style={{ marginBottom: 12 }}>
+                        <div className="field">
+                          <label>Tipo de avión</label>
+                          <select value={nuevoVuelo.aircraftTypeId} onChange={(e) => setNuevoVuelo({ ...nuevoVuelo, aircraftTypeId: e.target.value })}>
+                            <option value="">Selecciona el tipo de avión</option>
+                            {aircraftTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                          </select>
+                        </div>
+                        <div className="field"><label>Horas</label><input type="number" step="0.1" value={nuevoVuelo.hours} onChange={(e) => setNuevoVuelo({ ...nuevoVuelo, hours: e.target.value })} required /></div>
+                        <div className="field"><label>Fecha</label><input type="date" value={nuevoVuelo.date} onChange={(e) => setNuevoVuelo({ ...nuevoVuelo, date: e.target.value })} required /></div>
+                        <div className="field"><label>Notas (opcional)</label><input value={nuevoVuelo.notes} onChange={(e) => setNuevoVuelo({ ...nuevoVuelo, notes: e.target.value })} /></div>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button className="btn" style={{ padding: '5px 12px', fontSize: 12 }}>Guardar vuelo</button>
+                          <button type="button" className="btn secondary" style={{ padding: '5px 12px', fontSize: 12 }} onClick={() => setMostrarNuevoVuelo(false)}>Cancelar</button>
+                        </div>
+                      </form>
+                    )}
+
+                    {cargandoFlightLogs && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Cargando...</div>}
+                    {!cargandoFlightLogs && flightLogs.length === 0 && (
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Sin vuelos registrados todavía.</div>
+                    )}
+                    {!cargandoFlightLogs && flightLogs.map((f) => (
+                      <div key={f.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 600 }}>{f.aircraftType.name} — {Number(f.hours).toFixed(1)} hrs</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                            {new Date(f.date).toLocaleDateString('es-PE', { timeZone: 'UTC' })} · Registrado por {f.createdBy.firstName} {f.createdBy.lastName}
+                            {f.notes && ` · ${f.notes}`}
+                          </div>
+                        </div>
+                        {puedeEditarHoras && (
+                          <button className="btn danger" style={{ padding: '2px 8px', fontSize: 10 }} onClick={() => eliminarVuelo(f)}>Eliminar</button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ borderTop: '1px solid var(--border)', marginTop: 18, paddingTop: 14 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>Historial de simulador</div>
+                      {puedeEditarHoras && !mostrarNuevoSimulador && (
+                        <button className="btn secondary" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => setMostrarNuevoSimulador(true)}>+ Registrar sesión</button>
+                      )}
+                    </div>
+
+                    {mostrarNuevoSimulador && (
+                      <form onSubmit={registrarSimulador} style={{ marginBottom: 12 }}>
+                        <div className="field">
+                          <label>Tipo de simulador</label>
+                          <select value={nuevoSimulador.simulatorTypeId} onChange={(e) => setNuevoSimulador({ ...nuevoSimulador, simulatorTypeId: e.target.value })}>
+                            <option value="">Selecciona el tipo de simulador</option>
+                            {simulatorTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                          </select>
+                        </div>
+                        <div className="field"><label>Horas</label><input type="number" step="0.1" value={nuevoSimulador.hours} onChange={(e) => setNuevoSimulador({ ...nuevoSimulador, hours: e.target.value })} required /></div>
+                        <div className="field"><label>Fecha</label><input type="date" value={nuevoSimulador.date} onChange={(e) => setNuevoSimulador({ ...nuevoSimulador, date: e.target.value })} required /></div>
+                        <div className="field"><label>Notas (opcional)</label><input value={nuevoSimulador.notes} onChange={(e) => setNuevoSimulador({ ...nuevoSimulador, notes: e.target.value })} /></div>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button className="btn" style={{ padding: '5px 12px', fontSize: 12 }}>Guardar sesión</button>
+                          <button type="button" className="btn secondary" style={{ padding: '5px 12px', fontSize: 12 }} onClick={() => setMostrarNuevoSimulador(false)}>Cancelar</button>
+                        </div>
+                      </form>
+                    )}
+
+                    {cargandoSimulatorLogs && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Cargando...</div>}
+                    {!cargandoSimulatorLogs && simulatorLogs.length === 0 && (
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Sin sesiones de simulador registradas todavía.</div>
+                    )}
+                    {!cargandoSimulatorLogs && simulatorLogs.map((s) => (
+                      <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 600 }}>{s.simulatorType.name} — {Number(s.hours).toFixed(1)} hrs</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                            {new Date(s.date).toLocaleDateString('es-PE', { timeZone: 'UTC' })} · Registrado por {s.createdBy.firstName} {s.createdBy.lastName}
+                            {s.notes && ` · ${s.notes}`}
+                          </div>
+                        </div>
+                        {puedeEditarHoras && (
+                          <button className="btn danger" style={{ padding: '2px 8px', fontSize: 10 }} onClick={() => eliminarSimulador(s)}>Eliminar</button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
