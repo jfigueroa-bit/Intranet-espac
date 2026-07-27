@@ -18,22 +18,28 @@ export default function Programaciones() {
   const [instructores, setInstructores] = useState([]);
   const [diaSeleccionado, setDiaSeleccionado] = useState(null);
   const [busquedaAlumno, setBusquedaAlumno] = useState('');
-  const [form, setForm] = useState({ type: 'TEORIA', studentId: '', instructorId: '', startTime: '09:00', endTime: '10:00', notes: '' });
+  const [form, setForm] = useState({ type: 'TEORIA', studentId: '', instructorId: '', startTime: '09:00', endTime: '10:00', notes: '', aircraftTypeId: '', simulatorTypeId: '' });
   const [editandoId, setEditandoId] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
+  const [aircraftTypes, setAircraftTypes] = useState([]);
+  const [simulatorTypes, setSimulatorTypes] = useState([]);
 
   useEffect(() => { cargar(); }, []);
 
   async function cargar() {
-    const [s, e, u] = await Promise.all([
+    const [s, e, u, av, sim] = await Promise.all([
       api.get('/schedules'),
       api.get('/students'),
       api.get('/users'),
+      api.get('/aircraft-types'),
+      api.get('/simulator-types'),
     ]);
     setSesiones(s.data);
     setEstudiantes(e.data);
     setInstructores(u.data.filter((x) => x.role === 'INSTRUCTOR'));
+    setAircraftTypes(av.data);
+    setSimulatorTypes(sim.data);
   }
 
   const semanas = useMemo(() => generarMes(year, month), [year, month]);
@@ -73,7 +79,7 @@ export default function Programaciones() {
 
   function limpiarFormulario() {
     setEditandoId(null);
-    setForm({ type: 'TEORIA', studentId: '', instructorId: '', startTime: '09:00', endTime: '10:00', notes: '' });
+    setForm({ type: 'TEORIA', studentId: '', instructorId: '', startTime: '09:00', endTime: '10:00', notes: '', aircraftTypeId: '', simulatorTypeId: '' });
     setBusquedaAlumno('');
     setError('');
   }
@@ -83,9 +89,17 @@ export default function Programaciones() {
     setForm({
       type: s.type, studentId: s.studentId, instructorId: s.instructorId,
       startTime: s.startTime, endTime: s.endTime, notes: s.notes || '',
+      aircraftTypeId: '', simulatorTypeId: '',
     });
     setBusquedaAlumno(`${s.student.firstName} ${s.student.lastName}`);
     setError('');
+  }
+
+  function calcularHoras(inicio, fin) {
+    const [h1, m1] = inicio.split(':').map(Number);
+    const [h2, m2] = fin.split(':').map(Number);
+    const minutos = (h2 * 60 + m2) - (h1 * 60 + m1);
+    return Math.max(minutos, 0) / 60;
   }
 
   async function guardarSesion(e) {
@@ -93,12 +107,34 @@ export default function Programaciones() {
     setError('');
     if (!form.studentId) { setError('Elige un alumno'); return; }
     if (!form.instructorId) { setError('Elige un instructor'); return; }
+    if (!editandoId && form.type === 'VUELO' && !form.aircraftTypeId) { setError('Elige el tipo de avión'); return; }
+    if (!editandoId && form.type === 'SIMULADOR' && !form.simulatorTypeId) { setError('Elige el tipo de simulador'); return; }
     setGuardando(true);
     try {
       if (editandoId) {
         await api.patch(`/schedules/${editandoId}`, { ...form, date: diaSeleccionado });
       } else {
         await api.post('/schedules', { ...form, date: diaSeleccionado });
+
+        const horas = calcularHoras(form.startTime, form.endTime);
+        if (form.type === 'VUELO') {
+          await api.post('/flight-logs', {
+            studentId: form.studentId,
+            aircraftTypeId: form.aircraftTypeId,
+            hours: horas,
+            date: diaSeleccionado,
+            notes: form.notes || 'Registrado desde Programaciones',
+          });
+        }
+        if (form.type === 'SIMULADOR') {
+          await api.post('/simulator-logs', {
+            studentId: form.studentId,
+            simulatorTypeId: form.simulatorTypeId,
+            hours: horas,
+            date: diaSeleccionado,
+            notes: form.notes || 'Registrado desde Programaciones',
+          });
+        }
       }
       limpiarFormulario();
       cargar();
@@ -245,6 +281,26 @@ export default function Programaciones() {
                   </div>
                 </div>
 
+                {!editandoId && form.type === 'VUELO' && (
+                  <div className="field">
+                    <label>Tipo de avión</label>
+                    <select value={form.aircraftTypeId} onChange={(e) => setForm({ ...form, aircraftTypeId: e.target.value })}>
+                      <option value="">Selecciona el tipo de avión</option>
+                      {aircraftTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                  </div>
+                )}
+
+                {!editandoId && form.type === 'SIMULADOR' && (
+                  <div className="field">
+                    <label>Tipo de simulador</label>
+                    <select value={form.simulatorTypeId} onChange={(e) => setForm({ ...form, simulatorTypeId: e.target.value })}>
+                      <option value="">Selecciona el tipo de simulador</option>
+                      {simulatorTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                  </div>
+                )}
+
                 <div className="field" style={{ position: 'relative' }}>
                   <label>Alumno</label>
                   <input
@@ -301,6 +357,11 @@ export default function Programaciones() {
                     <button type="button" className="btn secondary" onClick={limpiarFormulario}>Cancelar</button>
                   )}
                 </div>
+                {!editandoId && (form.type === 'VUELO' || form.type === 'SIMULADOR') && (
+                  <div style={{ fontSize: 11, color: 'var(--success)', marginTop: 6 }}>
+                    ✓ Esto también sumará las horas al historial de {form.type === 'VUELO' ? 'Vuelo' : 'Simulador'} del alumno, en Alumnos → Horas.
+                  </div>
+                )}
               </form>
             )}
           </div>
