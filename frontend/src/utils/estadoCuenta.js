@@ -1,13 +1,19 @@
+// Arma un "estado de cuenta" en HTML, listo para ver/imprimir/guardar como PDF
+// desde el navegador (mismo patrón que los documentos generados en Documentos).
+
+const SIMBOLO = { PEN: 'S/', USD: '$' };
+
 export function construirEstadoCuentaHTML({ alumno, cuotas }) {
   const hoy = new Date();
 
   const filas = cuotas.map((c) => {
     const vencida = !c.paidDate && new Date(c.dueDate) < hoy;
     const estado = c.paidDate ? 'Pagada' : vencida ? 'Vencida' : 'Pendiente';
+    const simbolo = SIMBOLO[c.currency] || 'S/';
     return `
       <tr>
         <td>${c.concept}</td>
-        <td>S/ ${Number(c.amount).toFixed(2)}</td>
+        <td>${simbolo} ${Number(c.amount).toFixed(2)}</td>
         <td>${new Date(c.dueDate).toLocaleDateString('es-PE', { timeZone: 'UTC' })}</td>
         <td>${c.paidDate ? new Date(c.paidDate).toLocaleDateString('es-PE') : '—'}</td>
         <td>${estado}</td>
@@ -15,8 +21,19 @@ export function construirEstadoCuentaHTML({ alumno, cuotas }) {
     `;
   }).join('');
 
-  const totalPagado = cuotas.filter((c) => c.paidDate).reduce((s, c) => s + Number(c.amount), 0);
-  const totalPendiente = cuotas.filter((c) => !c.paidDate).reduce((s, c) => s + Number(c.amount), 0);
+  // Los totales se separan por moneda, para no sumar soles con dólares
+  const totalesPorMoneda = {};
+  cuotas.forEach((c) => {
+    const moneda = c.currency || 'PEN';
+    if (!totalesPorMoneda[moneda]) totalesPorMoneda[moneda] = { pagado: 0, pendiente: 0 };
+    if (c.paidDate) totalesPorMoneda[moneda].pagado += Number(c.amount);
+    else totalesPorMoneda[moneda].pendiente += Number(c.amount);
+  });
+
+  const filasTotales = Object.entries(totalesPorMoneda).map(([moneda, t]) => `
+    <div><strong>Total pagado (${SIMBOLO[moneda] || 'S/'}):</strong> ${SIMBOLO[moneda] || 'S/'} ${t.pagado.toFixed(2)}</div>
+    <div><strong>Total pendiente (${SIMBOLO[moneda] || 'S/'}):</strong> ${SIMBOLO[moneda] || 'S/'} ${t.pendiente.toFixed(2)}</div>
+  `).join('<div style="height:8px;"></div>');
 
   return `<!doctype html>
 <html lang="es">
@@ -61,8 +78,7 @@ export function construirEstadoCuentaHTML({ alumno, cuotas }) {
   </table>
 
   <div class="totales">
-    <div><strong>Total pagado:</strong> S/ ${totalPagado.toFixed(2)}</div>
-    <div><strong>Total pendiente:</strong> S/ ${totalPendiente.toFixed(2)}</div>
+    ${filasTotales || ''}
   </div>
 
   <div class="no-imprimir" style="margin-top:40px; text-align:right;">
