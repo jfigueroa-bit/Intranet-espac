@@ -59,7 +59,7 @@ model User {
   role                Role       @default(EMPLEADO)
   cargo               String?    // puesto (ej: "Asesora de Ventas")
   signatureData       String?    @db.Text // firma digital guardada (imagen en base64)
-profilePhoto        String?    @db.Text // foto de perfil (imagen en base64)
+  profilePhoto        String?    @db.Text // foto de perfil (imagen en base64)
   schedule            Json       @default("[]") // horario semanal: [{ day, active, start, end }]
   scheduleNote        String?    // nota adicional opcional (ej: "Turno rotativo cada 2 semanas")
   workStatus          WorkStatus @default(PRESENCIAL)
@@ -70,6 +70,7 @@ profilePhoto        String?    @db.Text // foto de perfil (imagen en base64)
   vacationDaysTotal   Int        @default(30)
   vacationDaysUsed    Int        @default(0)
   isActive            Boolean    @default(true)
+  canViewPayments     Boolean    @default(false) // permiso individual (no por rol) para ver cuotas/pagos de alumnos
   createdAt           DateTime   @default(now())
   updatedAt           DateTime   @updatedAt
 
@@ -93,6 +94,8 @@ profilePhoto        String?    @db.Text // foto de perfil (imagen en base64)
   sesionesCreadas        ScheduleSession[] @relation("SesionesCreadas")
   solicitudesCreadas     Request[] @relation("SolicitudesCreadas")
   solicitudesRecibidas   Request[] @relation("SolicitudesRecibidas")
+  pagosCreados           Payment[]
+  suscripcionesPush      PushSubscription[]
 }
 
 model Announcement {
@@ -334,6 +337,7 @@ model Student {
   updatedAt         DateTime @updatedAt
 
   sessions ScheduleSession[]
+  payments Payment[]
 }
 
 // Una sesión programada: clase de teoría, simulador, o vuelo. La agenda el
@@ -345,7 +349,7 @@ model ScheduleSession {
   startTime    String   // "HH:MM"
   endTime      String   // "HH:MM"
   studentId    Int
-  student      Student  @relation(fields: [studentId], references: [id])
+  student      Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   instructorId Int
   instructor   User     @relation("SesionesComoInstructor", fields: [instructorId], references: [id])
   notes        String?
@@ -372,4 +376,33 @@ model Request {
   responseNote String?   // comentario al resolver/rechazar
   createdAt    DateTime  @default(now())
   resolvedAt   DateTime?
+}
+
+// Cuota/pago de un alumno. El acceso a este módulo NO depende del rol, sino
+// de un permiso individual (User.canViewPayments), que solo un Admin otorga
+// persona por persona desde Usuarios. Admin y Gerencia siempre tienen acceso.
+model Payment {
+  id          Int       @id @default(autoincrement())
+  studentId   Int
+  student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  concept     String    // ej: "Cuota 1 - Piloto Privado"
+  amount      Float
+  dueDate     DateTime  // fecha de vencimiento
+  paidDate    DateTime? // null = todavía no se ha pagado
+  notes       String?
+  createdById Int
+  createdBy   User      @relation(fields: [createdById], references: [id])
+  createdAt   DateTime  @default(now())
+}
+
+// Suscripción de un navegador/dispositivo a notificaciones push. Una persona
+// puede tener varias (ej: su celular y su laptop).
+model PushSubscription {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique @db.Text
+  p256dh    String   @db.Text
+  auth      String   @db.Text
+  createdAt DateTime @default(now())
 }
