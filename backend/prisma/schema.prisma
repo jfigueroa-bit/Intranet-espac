@@ -315,6 +315,7 @@ model Course {
   name      String    @unique
   createdAt DateTime  @default(now())
   students  Student[]
+  enrollments StudentCourse[]
 }
 
 model Student {
@@ -338,6 +339,7 @@ model Student {
 
   sessions ScheduleSession[]
   payments Payment[]
+  courseEnrollments StudentCourse[]
 }
 
 // Una sesión programada: clase de teoría, simulador, o vuelo. La agenda el
@@ -405,4 +407,18 @@ model PushSubscription {
   p256dh    String   @db.Text
   auth      String   @db.Text
   createdAt DateTime @default(now())
+}
+
+// Historial de inscripciones de un alumno a distintos cursos, con su estado.
+// Es independiente del "curso principal" que se asigna al matricular (Student.courseId),
+// y permite ver/registrar todos los cursos por los que ha pasado un alumno.
+model StudentCourse {
+  id          Int       @id @default(autoincrement())
+  studentId   Int
+  student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  courseId    Int
+  course      Course    @relation(fields: [courseId], references: [id])
+  status      String    @default("EN_CURSO") // EN_CURSO | COMPLETADO
+  enrolledAt  DateTime  @default(now())
+  completedAt DateTime?
 }
