@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { MESES, DIAS_SEMANA, aFechaLocal, generarMes } from '../utils/calendario';
 import { TIPOS_SESION as TIPOS, COLOR_TIPO_SESION as COLOR_TIPO, LABEL_TIPO_SESION as LABEL_TIPO } from '../utils/programaciones';
 
+const ICONO_TIPO = { TEORIA: '📖', SIMULADOR: '🎮', VUELO: '🛩️' };
+
 export default function Programaciones() {
   const { user } = useAuth();
   const puedeGestionar = ['ADMIN', 'GERENCIA', 'INSTRUCTOR'].includes(user?.role);
@@ -120,7 +122,7 @@ export default function Programaciones() {
 
   return (
     <div>
-      <h2 style={{ marginTop: 0 }}>Programaciones</h2>
+      <h2 style={{ marginTop: 0 }}>🗓️ Programaciones</h2>
       <p style={{ color: 'var(--text-muted)' }}>
         Sesiones de teoría, simulador y vuelo. Haz clic en un día para ver o programar sesiones.
       </p>
@@ -136,7 +138,7 @@ export default function Programaciones() {
           <div style={{ display: 'flex', gap: 14, marginBottom: 10, fontSize: 12 }}>
             {TIPOS.map((t) => (
               <div key={t.value} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span style={{ width: 9, height: 9, borderRadius: '50%', background: t.color, display: 'inline-block' }} />
+                <span>{ICONO_TIPO[t.value]}</span>
                 {t.label}
               </div>
             ))}
@@ -170,7 +172,7 @@ export default function Programaciones() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 4 }}>
                     {sesionesDia.slice(0, 2).map((s) => (
                       <div key={s.id} style={{ fontSize: 10, background: COLOR_TIPO[s.type], color: '#fff', borderRadius: 4, padding: '1px 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {s.startTime} {s.student.firstName}
+                        {ICONO_TIPO[s.type]} {s.startTime} {s.student.firstName}
                       </div>
                     ))}
                     {sesionesDia.length > 2 && (
@@ -186,21 +188,21 @@ export default function Programaciones() {
         {diaSeleccionado && (
           <div className="card">
             <h3 style={{ marginTop: 0, fontSize: 14 }}>
-              {new Date(diaSeleccionado + 'T00:00:00').toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long' })}
+              📅 {new Date(diaSeleccionado + 'T00:00:00').toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long' })}
             </h3>
 
             {sesionesDelDia.map((s) => (
-              <div key={s.id} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid var(--border)' }}>
+              <div key={s.id} className="card" style={{ marginBottom: 10, borderLeft: `4px solid ${COLOR_TIPO[s.type]}` }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: COLOR_TIPO[s.type], display: 'inline-block' }} />
+                  <span style={{ fontSize: 16 }}>{ICONO_TIPO[s.type]}</span>
                   <strong style={{ fontSize: 13 }}>{LABEL_TIPO[s.type]}</strong>
                   <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{s.startTime}–{s.endTime}</span>
                 </div>
                 <div style={{ fontSize: 13, marginTop: 2 }}>
-                  Alumno: {s.student.firstName} {s.student.lastName} ({s.student.code})
+                  🎓 {s.student.firstName} {s.student.lastName} ({s.student.code})
                 </div>
                 <div style={{ fontSize: 13 }}>
-                  Instructor: {s.instructor.firstName} {s.instructor.lastName}
+                  👤 {s.instructor.firstName} {s.instructor.lastName}
                 </div>
                 {s.notes && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{s.notes}</div>}
                 {puedeGestionar && (
@@ -212,20 +214,35 @@ export default function Programaciones() {
               </div>
             ))}
             {sesionesDelDia.length === 0 && (
-              <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 10 }}>No hay sesiones este día.</div>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 10 }}>Sin sesiones este día.</div>
             )}
 
             {puedeGestionar && (
               <form onSubmit={guardarSesion} style={{ borderTop: '1px solid var(--border)', paddingTop: 10, marginTop: 4 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
-                  {editandoId ? 'Editar sesión' : 'Programar sesión nueva'}
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>
+                  {editandoId ? '✏️ Editar sesión' : '+ Programar sesión nueva'}
                 </div>
 
-                <div className="field">
-                  <label>Tipo</label>
-                  <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-                    {TIPOS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                  </select>
+                <div style={{ marginBottom: 12 }}>
+                  <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Tipo</label>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {TIPOS.map((t) => (
+                      <button
+                        key={t.value}
+                        type="button"
+                        onClick={() => setForm({ ...form, type: t.value })}
+                        style={{
+                          flex: 1, padding: '8px 4px', borderRadius: 10, cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                          border: form.type === t.value ? `2px solid ${t.color}` : '2px solid var(--border)',
+                          background: form.type === t.value ? `${t.color}14` : '#fff',
+                          color: form.type === t.value ? t.color : 'var(--text)',
+                        }}
+                      >
+                        <div style={{ fontSize: 16, marginBottom: 2 }}>{ICONO_TIPO[t.value]}</div>
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="field" style={{ position: 'relative' }}>
