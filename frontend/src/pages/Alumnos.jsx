@@ -93,7 +93,7 @@ export default function Alumnos() {
   const [nuevaCuota, setNuevaCuota] = useState({ concept: '', amount: '', currency: 'PEN', dueDate: '' });
   const [mostrarNuevaCuota, setMostrarNuevaCuota] = useState(false);
 
-  const [nuevaSesion, setNuevaSesion] = useState({ type: 'TEORIA', instructorId: '', fecha: new Date().toISOString().slice(0, 10), startTime: '09:00', endTime: '10:00', notes: '' });
+  const [nuevaSesion, setNuevaSesion] = useState({ type: 'TEORIA', instructorId: '', fecha: new Date().toISOString().slice(0, 10), startTime: '09:00', endTime: '10:00', notes: '', aircraftTypeId: '', simulatorTypeId: '' });
   const [guardandoSesion, setGuardandoSesion] = useState(false);
 
   const [aircraftTypes, setAircraftTypes] = useState([]);
@@ -209,10 +209,19 @@ export default function Alumnos() {
     cargarSesionesAlumno(seleccionado.id);
   }
 
+  function calcularHoras(inicio, fin) {
+    const [h1, m1] = inicio.split(':').map(Number);
+    const [h2, m2] = fin.split(':').map(Number);
+    const minutos = (h2 * 60 + m2) - (h1 * 60 + m1);
+    return Math.max(minutos, 0) / 60;
+  }
+
   async function programarSesion(e) {
     e.preventDefault();
     setError('');
     if (!nuevaSesion.instructorId) { setError('Elige un instructor'); return; }
+    if (nuevaSesion.type === 'VUELO' && !nuevaSesion.aircraftTypeId) { setError('Elige el tipo de avión'); return; }
+    if (nuevaSesion.type === 'SIMULADOR' && !nuevaSesion.simulatorTypeId) { setError('Elige el tipo de simulador'); return; }
     setGuardandoSesion(true);
     try {
       await api.post('/schedules', {
@@ -224,8 +233,36 @@ export default function Alumnos() {
         studentId: seleccionado.id,
         instructorId: nuevaSesion.instructorId,
       });
-      setNuevaSesion({ type: 'TEORIA', instructorId: '', fecha: new Date().toISOString().slice(0, 10), startTime: '09:00', endTime: '10:00', notes: '' });
+
+      const horas = calcularHoras(nuevaSesion.startTime, nuevaSesion.endTime);
+
+      if (nuevaSesion.type === 'VUELO') {
+        await api.post('/flight-logs', {
+          studentId: seleccionado.id,
+          aircraftTypeId: nuevaSesion.aircraftTypeId,
+          hours: horas,
+          date: nuevaSesion.fecha,
+          notes: nuevaSesion.notes || 'Registrado desde Programar',
+        });
+        setEdit((prev) => ({ ...prev, flightHours: Number(prev.flightHours) + horas }));
+        cargarFlightLogs(seleccionado.id);
+      }
+
+      if (nuevaSesion.type === 'SIMULADOR') {
+        await api.post('/simulator-logs', {
+          studentId: seleccionado.id,
+          simulatorTypeId: nuevaSesion.simulatorTypeId,
+          hours: horas,
+          date: nuevaSesion.fecha,
+          notes: nuevaSesion.notes || 'Registrado desde Programar',
+        });
+        setEdit((prev) => ({ ...prev, simulatorHours: Number(prev.simulatorHours) + horas }));
+        cargarSimulatorLogs(seleccionado.id);
+      }
+
+      setNuevaSesion({ type: 'TEORIA', instructorId: '', fecha: new Date().toISOString().slice(0, 10), startTime: '09:00', endTime: '10:00', notes: '', aircraftTypeId: '', simulatorTypeId: '' });
       cargarSesionesAlumno(seleccionado.id);
+      cargarAlumnos();
     } catch (err) {
       setError(err.response?.data?.error || 'No se pudo programar la sesión');
     } finally {
@@ -381,7 +418,7 @@ export default function Alumnos() {
   }
 
   function verReporteHoras() {
-    const html = construirReporteHorasHTML({ alumno: seleccionado, sesiones: sesionesAlumno });
+    const html = construirReporteHorasHTML({ alumno: seleccionado, sesiones: sesionesAlumno, flightLogs, simulatorLogs });
     const ventana = window.open('', '_blank');
     ventana.document.write(html);
     ventana.document.close();
@@ -902,13 +939,31 @@ export default function Alumnos() {
                         <div className="field"><label>Fecha</label><input type="date" value={nuevaSesion.fecha} onChange={(e) => setNuevaSesion({ ...nuevaSesion, fecha: e.target.value })} /></div>
                         <div className="field"><label>Desde</label><input type="time" value={nuevaSesion.startTime} onChange={(e) => setNuevaSesion({ ...nuevaSesion, startTime: e.target.value })} /></div>
                         <div className="field"><label>Hasta</label><input type="time" value={nuevaSesion.endTime} onChange={(e) => setNuevaSesion({ ...nuevaSesion, endTime: e.target.value })} /></div>
+                        {nuevaSesion.type === 'VUELO' && (
+                          <div className="field">
+                            <label>Tipo de avión</label>
+                            <select value={nuevaSesion.aircraftTypeId} onChange={(e) => setNuevaSesion({ ...nuevaSesion, aircraftTypeId: e.target.value })}>
+                              <option value="">Selecciona el tipo de avión</option>
+                              {aircraftTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                            </select>
+                          </div>
+                        )}
+                        {nuevaSesion.type === 'SIMULADOR' && (
+                          <div className="field">
+                            <label>Tipo de simulador</label>
+                            <select value={nuevaSesion.simulatorTypeId} onChange={(e) => setNuevaSesion({ ...nuevaSesion, simulatorTypeId: e.target.value })}>
+                              <option value="">Selecciona el tipo de simulador</option>
+                              {simulatorTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                            </select>
+                          </div>
+                        )}
                         <div className="field"><label>Notas (opcional)</label><input value={nuevaSesion.notes} onChange={(e) => setNuevaSesion({ ...nuevaSesion, notes: e.target.value })} /></div>
                       </div>
                       <button className="btn" style={{ marginTop: 10 }} disabled={guardandoSesion}>
                         {guardandoSesion ? 'Programando...' : 'Programar sesión'}
                       </button>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
-                        Esta sesión aparecerá automáticamente en el calendario de Programaciones.
+                        Esta sesión aparecerá automáticamente en el calendario de Programaciones{(nuevaSesion.type === 'VUELO' || nuevaSesion.type === 'SIMULADOR') && ', y las horas se sumarán al historial correspondiente'}.
                       </div>
                     </form>
                   )}
