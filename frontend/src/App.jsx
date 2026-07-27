@@ -12,6 +12,7 @@ import Chat from './pages/Chat.jsx';
 import Alumnos from './pages/Alumnos.jsx';
 import Programaciones from './pages/Programaciones.jsx';
 import Solicitudes from './pages/Solicitudes.jsx';
+import Reportes from './pages/Reportes.jsx';
 import Usuarios from './pages/admin/Usuarios.jsx';
 import Areas from './pages/admin/Areas.jsx';
 import Horarios from './pages/Horarios.jsx';
@@ -48,6 +49,14 @@ export default function App() {
         <Route path="alumnos" element={<Alumnos />} />
         <Route path="programaciones" element={<Programaciones />} />
         <Route path="solicitudes" element={<Solicitudes />} />
+        <Route
+          path="reportes"
+          element={
+            <RutaProtegida roles={['ADMIN', 'GERENCIA']}>
+              <Reportes />
+            </RutaProtegida>
+          }
+        />
         <Route
           path="admin/usuarios"
           element={
