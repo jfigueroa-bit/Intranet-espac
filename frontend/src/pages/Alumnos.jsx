@@ -44,14 +44,30 @@ function filaAObjeto(filaExcel) {
 }
 
 const TABS = [
-  { value: 'general', label: 'General' },
-  { value: 'cursos', label: 'Cursos' },
-  { value: 'horas', label: 'Horas' },
-  { value: 'programar', label: 'Programar' },
-  { value: 'pagos', label: 'Pagos' },
+  { value: 'general', label: 'General', icono: '👤' },
+  { value: 'cursos', label: 'Cursos', icono: '🎓' },
+  { value: 'horas', label: 'Horas', icono: '⏱️' },
+  { value: 'programar', label: 'Programar', icono: '🗓️' },
+  { value: 'pagos', label: 'Pagos', icono: '💳' },
 ];
 
 const SIMBOLO_MONEDA = { PEN: 'S/', USD: '$' };
+const ICONO_TIPO = { TEORIA: '📖', SIMULADOR: '🎮', VUELO: '🛩️' };
+
+function TarjetaStat({ icono, color, numero, etiqueta }) {
+  return (
+    <div className="card" style={{ textAlign: 'center', padding: '18px 10px' }}>
+      <div style={{
+        width: 44, height: 44, borderRadius: '50%', background: `${color}1a`, color,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, margin: '0 auto 10px',
+      }}>
+        {icono}
+      </div>
+      <div style={{ fontSize: 24, fontWeight: 700 }}>{numero}</div>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.03em', marginTop: 2 }}>{etiqueta}</div>
+    </div>
+  );
+}
 
 export default function Alumnos() {
   const { user } = useAuth();
@@ -70,6 +86,9 @@ export default function Alumnos() {
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
   const [tabFicha, setTabFicha] = useState('general');
+  const [subTabHoras, setSubTabHoras] = useState('resumen');
+  const [editarHorasManual, setEditarHorasManual] = useState(false);
+  const [catalogoAbierto, setCatalogoAbierto] = useState('cursos');
 
   const [mostrarNuevo, setMostrarNuevo] = useState(false);
   const [nuevo, setNuevo] = useState({ firstName: '', lastName: '', email: '', phone: '', courseId: '', enrollmentDate: new Date().toISOString().slice(0, 10) });
@@ -173,6 +192,8 @@ export default function Alumnos() {
   function abrirFicha(alumno) {
     setSeleccionado(alumno);
     setTabFicha('general');
+    setSubTabHoras('resumen');
+    setEditarHorasManual(false);
     setEdit({
       firstName: alumno.firstName, lastName: alumno.lastName,
       email: alumno.email || '', phone: alumno.phone || '',
@@ -519,7 +540,7 @@ export default function Alumnos() {
         </button>
         {esAdmin && (
           <button className={`btn ${tab === 'cursos' ? '' : 'secondary'}`} style={{ padding: '6px 16px', fontSize: 13 }} onClick={() => setTab('cursos')}>
-            Catálogos
+            🗂️ Catálogos
           </button>
         )}
       </div>
@@ -612,7 +633,14 @@ export default function Alumnos() {
                 {alumnos.map((a) => (
                   <tr key={a.id} onClick={() => abrirFicha(a)} style={{ cursor: 'pointer' }}>
                     <td>{a.code}</td>
-                    <td>{a.firstName} {a.lastName}</td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'var(--primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                          {a.firstName?.[0]}{a.lastName?.[0]}
+                        </div>
+                        {a.firstName} {a.lastName}
+                      </div>
+                    </td>
                     <td>{a.course?.name || '—'}</td>
                     <td>{new Date(a.enrollmentDate).toLocaleDateString('es-PE', { timeZone: 'UTC' })}</td>
                     <td>{a.groundCourseHours}</td>
@@ -630,109 +658,132 @@ export default function Alumnos() {
       )}
 
       {tab === 'cursos' && esAdmin && (
-        <div>
-          <form onSubmit={crearCurso} className="card" style={{ marginBottom: 16, display: 'flex', gap: 8 }}>
-            <input value={nuevoCurso} onChange={(e) => setNuevoCurso(e.target.value)} placeholder="Ej: Piloto Privado, Piloto Comercial..." />
-            <button className="btn">Crear curso</button>
-          </form>
-
-          <div className="card" style={{ marginBottom: 16 }}>
-            <table>
-              <thead>
-                <tr><th>Curso</th><th>Alumnos</th><th></th></tr>
-              </thead>
-              <tbody>
+        <div style={{ display: 'grid', gap: 12 }}>
+          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            <button
+              onClick={() => setCatalogoAbierto(catalogoAbierto === 'cursos' ? '' : 'cursos')}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 16, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, fontWeight: 700 }}>
+                <span style={{ fontSize: 20 }}>🎓</span> Cursos <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-muted)' }}>({cursos.length})</span>
+              </span>
+              <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>{catalogoAbierto === 'cursos' ? '▲' : '▼'}</span>
+            </button>
+            {catalogoAbierto === 'cursos' && (
+              <div style={{ padding: '0 16px 16px' }}>
+                <form onSubmit={crearCurso} style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+                  <input value={nuevoCurso} onChange={(e) => setNuevoCurso(e.target.value)} placeholder="Ej: Piloto Privado, Piloto Comercial..." />
+                  <button className="btn">Crear</button>
+                </form>
                 {cursos.map((c) => (
-                  <tr key={c.id}>
-                    <td>{c.name}</td>
-                    <td>{c._count?.students ?? 0}</td>
-                    <td>
-                      <button className="btn danger" style={{ padding: '3px 10px', fontSize: 11 }} onClick={() => eliminarCurso(c.id)}>Eliminar</button>
-                    </td>
-                  </tr>
+                  <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                    <div>
+                      <strong style={{ fontSize: 13 }}>{c.name}</strong>
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>{c._count?.students ?? 0} alumno(s)</span>
+                    </div>
+                    <button className="btn danger" style={{ padding: '3px 10px', fontSize: 11 }} onClick={() => eliminarCurso(c.id)}>Eliminar</button>
+                  </div>
                 ))}
-                {cursos.length === 0 && (
-                  <tr><td colSpan={3} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 16 }}>Todavía no has creado ningún curso.</td></tr>
-                )}
-              </tbody>
-            </table>
+                {cursos.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Todavía no has creado ningún curso.</div>}
+              </div>
+            )}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <div>
-              <form onSubmit={crearTipoAvion} className="card" style={{ marginBottom: 16, display: 'flex', gap: 8 }}>
-                <input value={nuevoTipoAvion} onChange={(e) => setNuevoTipoAvion(e.target.value)} placeholder="Ej: Cessna 172" />
-                <button className="btn">Agregar</button>
-              </form>
-              <div className="card">
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Tipos de avión</div>
+          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            <button
+              onClick={() => setCatalogoAbierto(catalogoAbierto === 'aviones' ? '' : 'aviones')}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 16, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, fontWeight: 700 }}>
+                <span style={{ fontSize: 20 }}>🛩️</span> Tipos de avión <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-muted)' }}>({aircraftTypes.length})</span>
+              </span>
+              <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>{catalogoAbierto === 'aviones' ? '▲' : '▼'}</span>
+            </button>
+            {catalogoAbierto === 'aviones' && (
+              <div style={{ padding: '0 16px 16px' }}>
+                <form onSubmit={crearTipoAvion} style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+                  <input value={nuevoTipoAvion} onChange={(e) => setNuevoTipoAvion(e.target.value)} placeholder="Ej: Cessna 172" />
+                  <button className="btn">Agregar</button>
+                </form>
                 {aircraftTypes.map((t) => (
-                  <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
-                    <span style={{ fontSize: 13 }}>{t.name}</span>
-                    <button className="btn danger" style={{ padding: '2px 8px', fontSize: 10 }} onClick={() => eliminarTipoAvion(t.id)}>Eliminar</button>
+                  <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                    <span style={{ fontSize: 13 }}>✈️ {t.name}</span>
+                    <button className="btn danger" style={{ padding: '3px 10px', fontSize: 11 }} onClick={() => eliminarTipoAvion(t.id)}>Eliminar</button>
                   </div>
                 ))}
-                {aircraftTypes.length === 0 && (
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Todavía no has agregado ningún tipo de avión.</div>
-                )}
+                {aircraftTypes.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Todavía no has agregado ningún tipo de avión.</div>}
               </div>
-            </div>
+            )}
+          </div>
 
-            <div>
-              <form onSubmit={crearTipoSimulador} className="card" style={{ marginBottom: 16, display: 'flex', gap: 8 }}>
-                <input value={nuevoTipoSimulador} onChange={(e) => setNuevoTipoSimulador(e.target.value)} placeholder="Ej: Redbird FMX" />
-                <button className="btn">Agregar</button>
-              </form>
-              <div className="card">
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Tipos de simulador</div>
+          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            <button
+              onClick={() => setCatalogoAbierto(catalogoAbierto === 'simuladores' ? '' : 'simuladores')}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 16, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, fontWeight: 700 }}>
+                <span style={{ fontSize: 20 }}>🎮</span> Tipos de simulador <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-muted)' }}>({simulatorTypes.length})</span>
+              </span>
+              <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>{catalogoAbierto === 'simuladores' ? '▲' : '▼'}</span>
+            </button>
+            {catalogoAbierto === 'simuladores' && (
+              <div style={{ padding: '0 16px 16px' }}>
+                <form onSubmit={crearTipoSimulador} style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+                  <input value={nuevoTipoSimulador} onChange={(e) => setNuevoTipoSimulador(e.target.value)} placeholder="Ej: Redbird FMX" />
+                  <button className="btn">Agregar</button>
+                </form>
                 {simulatorTypes.map((t) => (
-                  <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
-                    <span style={{ fontSize: 13 }}>{t.name}</span>
-                    <button className="btn danger" style={{ padding: '2px 8px', fontSize: 10 }} onClick={() => eliminarTipoSimulador(t.id)}>Eliminar</button>
+                  <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                    <span style={{ fontSize: 13 }}>🕹️ {t.name}</span>
+                    <button className="btn danger" style={{ padding: '3px 10px', fontSize: 11 }} onClick={() => eliminarTipoSimulador(t.id)}>Eliminar</button>
                   </div>
                 ))}
-                {simulatorTypes.length === 0 && (
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Todavía no has agregado ningún tipo de simulador.</div>
-                )}
+                {simulatorTypes.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Todavía no has agregado ningún tipo de simulador.</div>}
               </div>
-            </div>
+            )}
           </div>
         </div>
       )}
 
-      <Modal abierto={!!seleccionado} onCerrar={cerrarFicha} ancho={640}>
+      <Modal abierto={!!seleccionado} onCerrar={cerrarFicha} ancho={680}>
         {seleccionado && edit && (
           <>
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 17 }}>{seleccionado.code} — {seleccionado.firstName} {seleccionado.lastName}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Ingresó el {new Date(seleccionado.enrollmentDate).toLocaleDateString('es-PE', { timeZone: 'UTC' })}</div>
+            <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700, flexShrink: 0 }}>
+                  {seleccionado.firstName?.[0]}{seleccionado.lastName?.[0]}
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 17 }}>{seleccionado.firstName} {seleccionado.lastName}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{seleccionado.code} · Ingresó el {new Date(seleccionado.enrollmentDate).toLocaleDateString('es-PE', { timeZone: 'UTC' })}</div>
+                </div>
               </div>
-              <button onClick={cerrarFicha} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer' }}>×</button>
+              <button onClick={cerrarFicha} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--text-muted)' }}>×</button>
             </div>
 
-            <div style={{ display: 'flex', gap: 4, padding: '10px 20px 0', borderBottom: '1px solid var(--border)', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 2, padding: '10px 14px 0', borderBottom: '1px solid var(--border)', flexWrap: 'wrap' }}>
               {TABS.map((t) => (
                 <button
                   key={t.value}
                   onClick={() => setTabFicha(t.value)}
                   style={{
                     background: 'none', border: 'none', cursor: 'pointer', padding: '8px 12px', fontSize: 13,
+                    display: 'flex', alignItems: 'center', gap: 6,
                     fontWeight: tabFicha === t.value ? 700 : 400,
                     borderBottom: tabFicha === t.value ? '2px solid var(--primary)' : '2px solid transparent',
                     color: tabFicha === t.value ? 'var(--primary)' : 'var(--text)',
                   }}
                 >
-                  {t.label}
+                  <span>{t.icono}</span> {t.label}
                 </button>
               ))}
             </div>
 
-            <div style={{ padding: 20, overflowY: 'auto', flex: 1 }}>
+            <div style={{ padding: 20, overflowY: 'auto', flex: 1, background: '#fafafa' }}>
               {error && <div className="error-text" style={{ marginBottom: 10 }}>{error}</div>}
 
               {tabFicha === 'general' && (
-                <div style={{ display: 'grid', gap: 10 }}>
+                <div className="card" style={{ display: 'grid', gap: 10 }}>
                   <div className="field"><label>Nombre(s)</label><input value={edit.firstName} onChange={(e) => setEdit({ ...edit, firstName: e.target.value })} disabled={!puedeGestionar} /></div>
                   <div className="field"><label>Apellido</label><input value={edit.lastName} onChange={(e) => setEdit({ ...edit, lastName: e.target.value })} disabled={!puedeGestionar} /></div>
                   <div className="field"><label>Correo</label><input value={edit.email} onChange={(e) => setEdit({ ...edit, email: e.target.value })} disabled={!puedeGestionar} /></div>
@@ -761,159 +812,233 @@ export default function Alumnos() {
               {tabFicha === 'cursos' && (
                 <div>
                   {puedeGestionar && (
-                    <form onSubmit={inscribirEnCurso} style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+                    <form onSubmit={inscribirEnCurso} className="card" style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
                       <select value={nuevaInscripcionCurso} onChange={(e) => setNuevaInscripcionCurso(e.target.value)} style={{ flex: 1 }}>
                         <option value="">Selecciona un curso para inscribir...</option>
                         {cursos.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                       </select>
-                      <button className="btn" style={{ padding: '6px 14px', fontSize: 13 }}>Inscribir</button>
+                      <button className="btn" style={{ padding: '6px 14px', fontSize: 13 }}>+ Inscribir</button>
                     </form>
                   )}
 
                   {cargandoInscripciones && <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Cargando...</div>}
                   {!cargandoInscripciones && inscripciones.length === 0 && (
-                    <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Este alumno no tiene cursos registrados en su historial todavía.</div>
+                    <div className="card" style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>🎓 Este alumno no tiene cursos registrados en su historial todavía.</div>
                   )}
-                  {!cargandoInscripciones && inscripciones.map((insc) => (
-                    <div key={insc.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: 14 }}>{insc.course.name}</div>
-                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                          Inscrito el {new Date(insc.enrolledAt).toLocaleDateString('es-PE')}
-                          {insc.completedAt && ` · Completado el ${new Date(insc.completedAt).toLocaleDateString('es-PE')}`}
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    {inscripciones.map((insc) => (
+                      <div key={insc.id} className="card" style={{
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        borderLeft: `4px solid ${insc.status === 'COMPLETADO' ? 'var(--success)' : '#e0a013'}`,
+                      }}>
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: 14 }}>🎓 {insc.course.name}</div>
+                          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                            Inscrito el {new Date(insc.enrolledAt).toLocaleDateString('es-PE')}
+                            {insc.completedAt && ` · Completado el ${new Date(insc.completedAt).toLocaleDateString('es-PE')}`}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{
+                            fontSize: 11, fontWeight: 600, padding: '4px 12px', borderRadius: 999,
+                            background: insc.status === 'COMPLETADO' ? '#e6f4ea' : '#fff4e0',
+                            color: insc.status === 'COMPLETADO' ? 'var(--success)' : '#a6650a',
+                          }}>
+                            {insc.status === 'COMPLETADO' ? '✓ Completado' : '⏳ En curso'}
+                          </span>
+                          {puedeGestionar && (
+                            <>
+                              <button className="btn secondary" style={{ padding: '3px 8px', fontSize: 11 }} onClick={() => alternarEstadoInscripcion(insc)}>
+                                {insc.status === 'COMPLETADO' ? 'En curso' : 'Completar'}
+                              </button>
+                              <button className="btn danger" style={{ padding: '3px 8px', fontSize: 11 }} onClick={() => eliminarInscripcion(insc.id)}>Quitar</button>
+                            </>
+                          )}
                         </div>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{
-                          fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 999,
-                          background: insc.status === 'COMPLETADO' ? '#e6f4ea' : '#fff4e0',
-                          color: insc.status === 'COMPLETADO' ? 'var(--success)' : '#a6650a',
-                        }}>
-                          {insc.status === 'COMPLETADO' ? 'Completado' : 'En curso'}
-                        </span>
-                        {puedeGestionar && (
-                          <>
-                            <button className="btn secondary" style={{ padding: '3px 8px', fontSize: 11 }} onClick={() => alternarEstadoInscripcion(insc)}>
-                              {insc.status === 'COMPLETADO' ? 'Marcar en curso' : 'Marcar completado'}
-                            </button>
-                            <button className="btn danger" style={{ padding: '3px 8px', fontSize: 11 }} onClick={() => eliminarInscripcion(insc.id)}>Quitar</button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               )}
 
               {tabFicha === 'horas' && (
                 <div>
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
-                    <button className="btn secondary" style={{ padding: '5px 12px', fontSize: 12 }} onClick={verReporteHoras}>
-                      Reporte de horas (PDF)
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+                    <button
+                      onClick={() => setSubTabHoras('resumen')}
+                      className={`btn ${subTabHoras === 'resumen' ? '' : 'secondary'}`}
+                      style={{ padding: '6px 14px', fontSize: 12 }}
+                    >
+                      📊 Resumen
+                    </button>
+                    <button
+                      onClick={() => setSubTabHoras('vuelo')}
+                      className={`btn ${subTabHoras === 'vuelo' ? '' : 'secondary'}`}
+                      style={{ padding: '6px 14px', fontSize: 12 }}
+                    >
+                      🛩️ Vuelo
+                    </button>
+                    <button
+                      onClick={() => setSubTabHoras('simulador')}
+                      className={`btn ${subTabHoras === 'simulador' ? '' : 'secondary'}`}
+                      style={{ padding: '6px 14px', fontSize: 12 }}
+                    >
+                      🎮 Simulador
+                    </button>
+                    <div style={{ flex: 1 }} />
+                    <button className="btn secondary" style={{ padding: '6px 14px', fontSize: 12 }} onClick={verReporteHoras}>
+                      📄 Reporte PDF
                     </button>
                   </div>
-                  <div style={{ display: 'grid', gap: 10 }}>
-                    <div className="field"><label>Horas de curso en tierra</label><input type="number" step="0.5" value={edit.groundCourseHours} onChange={(e) => setEdit({ ...edit, groundCourseHours: e.target.value })} disabled={!puedeEditarHoras} /></div>
-                    <div className="field"><label>Horas de vuelo (total)</label><input type="number" step="0.5" value={edit.flightHours} onChange={(e) => setEdit({ ...edit, flightHours: e.target.value })} disabled={!puedeEditarHoras} /></div>
-                    <div className="field"><label>Horas de simulador (total)</label><input type="number" step="0.5" value={edit.simulatorHours} onChange={(e) => setEdit({ ...edit, simulatorHours: e.target.value })} disabled={!puedeEditarHoras} /></div>
-                  </div>
-                  {puedeEditarHoras && (
-                    <button className="btn" style={{ marginTop: 12 }} disabled={guardando} onClick={guardarFicha}>{guardando ? 'Guardando...' : 'Guardar horas'}</button>
+
+                  {subTabHoras === 'resumen' && (
+                    <div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 14 }}>
+                        <TarjetaStat icono="📖" color={COLOR_TIPO_SESION.TEORIA} numero={Number(edit.groundCourseHours).toFixed(1)} etiqueta="Hrs. tierra" />
+                        <TarjetaStat icono="🛩️" color={COLOR_TIPO_SESION.VUELO} numero={Number(edit.flightHours).toFixed(1)} etiqueta="Hrs. vuelo" />
+                        <TarjetaStat icono="🎮" color={COLOR_TIPO_SESION.SIMULADOR} numero={Number(edit.simulatorHours).toFixed(1)} etiqueta="Hrs. simulador" />
+                      </div>
+
+                      {puedeEditarHoras && (
+                        <div className="card">
+                          {!editarHorasManual ? (
+                            <button className="btn secondary" style={{ fontSize: 12, padding: '6px 12px' }} onClick={() => setEditarHorasManual(true)}>
+                              ✏️ Corregir horas manualmente
+                            </button>
+                          ) : (
+                            <>
+                              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+                                Usa esto solo para correcciones puntuales. Lo normal es que las horas se sumen solas desde "Vuelo", "Simulador" o "Programar".
+                              </div>
+                              <div style={{ display: 'grid', gap: 10 }}>
+                                <div className="field"><label>Horas de curso en tierra</label><input type="number" step="0.5" value={edit.groundCourseHours} onChange={(e) => setEdit({ ...edit, groundCourseHours: e.target.value })} /></div>
+                                <div className="field"><label>Horas de vuelo (total)</label><input type="number" step="0.5" value={edit.flightHours} onChange={(e) => setEdit({ ...edit, flightHours: e.target.value })} /></div>
+                                <div className="field"><label>Horas de simulador (total)</label><input type="number" step="0.5" value={edit.simulatorHours} onChange={(e) => setEdit({ ...edit, simulatorHours: e.target.value })} /></div>
+                              </div>
+                              <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                                <button className="btn" disabled={guardando} onClick={guardarFicha}>{guardando ? 'Guardando...' : 'Guardar'}</button>
+                                <button className="btn secondary" onClick={() => setEditarHorasManual(false)}>Cerrar</button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   )}
 
-                  <div style={{ borderTop: '1px solid var(--border)', marginTop: 18, paddingTop: 14 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>Historial de vuelos</div>
-                      {puedeEditarHoras && !mostrarNuevoVuelo && (
-                        <button className="btn secondary" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => setMostrarNuevoVuelo(true)}>+ Registrar vuelo</button>
-                      )}
-                    </div>
-
-                    {mostrarNuevoVuelo && (
-                      <form onSubmit={registrarVuelo} style={{ marginBottom: 12 }}>
-                        <div className="field">
-                          <label>Tipo de avión</label>
-                          <select value={nuevoVuelo.aircraftTypeId} onChange={(e) => setNuevoVuelo({ ...nuevoVuelo, aircraftTypeId: e.target.value })}>
-                            <option value="">Selecciona el tipo de avión</option>
-                            {aircraftTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                          </select>
-                        </div>
-                        <div className="field"><label>Horas</label><input type="number" step="0.1" value={nuevoVuelo.hours} onChange={(e) => setNuevoVuelo({ ...nuevoVuelo, hours: e.target.value })} required /></div>
-                        <div className="field"><label>Fecha</label><input type="date" value={nuevoVuelo.date} onChange={(e) => setNuevoVuelo({ ...nuevoVuelo, date: e.target.value })} required /></div>
-                        <div className="field"><label>Notas (opcional)</label><input value={nuevoVuelo.notes} onChange={(e) => setNuevoVuelo({ ...nuevoVuelo, notes: e.target.value })} /></div>
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          <button className="btn" style={{ padding: '5px 12px', fontSize: 12 }}>Guardar vuelo</button>
-                          <button type="button" className="btn secondary" style={{ padding: '5px 12px', fontSize: 12 }} onClick={() => setMostrarNuevoVuelo(false)}>Cancelar</button>
-                        </div>
-                      </form>
-                    )}
-
-                    {cargandoFlightLogs && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Cargando...</div>}
-                    {!cargandoFlightLogs && flightLogs.length === 0 && (
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Sin vuelos registrados todavía.</div>
-                    )}
-                    {!cargandoFlightLogs && flightLogs.map((f) => (
-                      <div key={f.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
-                        <div>
-                          <div style={{ fontSize: 13, fontWeight: 600 }}>{f.aircraftType.name} — {Number(f.hours).toFixed(1)} hrs</div>
-                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                            {new Date(f.date).toLocaleDateString('es-PE', { timeZone: 'UTC' })} · Registrado por {f.createdBy.firstName} {f.createdBy.lastName}
-                            {f.notes && ` · ${f.notes}`}
-                          </div>
-                        </div>
-                        {puedeEditarHoras && (
-                          <button className="btn danger" style={{ padding: '2px 8px', fontSize: 10 }} onClick={() => eliminarVuelo(f)}>Eliminar</button>
+                  {subTabHoras === 'vuelo' && (
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                        <div style={{ fontSize: 15, fontWeight: 700 }}>🛩️ {Number(edit.flightHours).toFixed(1)} horas totales</div>
+                        {puedeEditarHoras && !mostrarNuevoVuelo && (
+                          <button className="btn secondary" style={{ padding: '5px 12px', fontSize: 12 }} onClick={() => setMostrarNuevoVuelo(true)}>+ Registrar vuelo</button>
                         )}
                       </div>
-                    ))}
-                  </div>
 
-                  <div style={{ borderTop: '1px solid var(--border)', marginTop: 18, paddingTop: 14 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>Historial de simulador</div>
-                      {puedeEditarHoras && !mostrarNuevoSimulador && (
-                        <button className="btn secondary" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => setMostrarNuevoSimulador(true)}>+ Registrar sesión</button>
-                      )}
-                    </div>
-
-                    {mostrarNuevoSimulador && (
-                      <form onSubmit={registrarSimulador} style={{ marginBottom: 12 }}>
-                        <div className="field">
-                          <label>Tipo de simulador</label>
-                          <select value={nuevoSimulador.simulatorTypeId} onChange={(e) => setNuevoSimulador({ ...nuevoSimulador, simulatorTypeId: e.target.value })}>
-                            <option value="">Selecciona el tipo de simulador</option>
-                            {simulatorTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                          </select>
-                        </div>
-                        <div className="field"><label>Horas</label><input type="number" step="0.1" value={nuevoSimulador.hours} onChange={(e) => setNuevoSimulador({ ...nuevoSimulador, hours: e.target.value })} required /></div>
-                        <div className="field"><label>Fecha</label><input type="date" value={nuevoSimulador.date} onChange={(e) => setNuevoSimulador({ ...nuevoSimulador, date: e.target.value })} required /></div>
-                        <div className="field"><label>Notas (opcional)</label><input value={nuevoSimulador.notes} onChange={(e) => setNuevoSimulador({ ...nuevoSimulador, notes: e.target.value })} /></div>
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          <button className="btn" style={{ padding: '5px 12px', fontSize: 12 }}>Guardar sesión</button>
-                          <button type="button" className="btn secondary" style={{ padding: '5px 12px', fontSize: 12 }} onClick={() => setMostrarNuevoSimulador(false)}>Cancelar</button>
-                        </div>
-                      </form>
-                    )}
-
-                    {cargandoSimulatorLogs && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Cargando...</div>}
-                    {!cargandoSimulatorLogs && simulatorLogs.length === 0 && (
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Sin sesiones de simulador registradas todavía.</div>
-                    )}
-                    {!cargandoSimulatorLogs && simulatorLogs.map((s) => (
-                      <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
-                        <div>
-                          <div style={{ fontSize: 13, fontWeight: 600 }}>{s.simulatorType.name} — {Number(s.hours).toFixed(1)} hrs</div>
-                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                            {new Date(s.date).toLocaleDateString('es-PE', { timeZone: 'UTC' })} · Registrado por {s.createdBy.firstName} {s.createdBy.lastName}
-                            {s.notes && ` · ${s.notes}`}
+                      {mostrarNuevoVuelo && (
+                        <form onSubmit={registrarVuelo} className="card" style={{ marginBottom: 12, borderLeft: `4px solid ${COLOR_TIPO_SESION.VUELO}` }}>
+                          <div className="field">
+                            <label>Tipo de avión</label>
+                            <select value={nuevoVuelo.aircraftTypeId} onChange={(e) => setNuevoVuelo({ ...nuevoVuelo, aircraftTypeId: e.target.value })}>
+                              <option value="">Selecciona el tipo de avión</option>
+                              {aircraftTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                            </select>
                           </div>
-                        </div>
-                        {puedeEditarHoras && (
-                          <button className="btn danger" style={{ padding: '2px 8px', fontSize: 10 }} onClick={() => eliminarSimulador(s)}>Eliminar</button>
+                          <div className="field"><label>Horas</label><input type="number" step="0.1" value={nuevoVuelo.hours} onChange={(e) => setNuevoVuelo({ ...nuevoVuelo, hours: e.target.value })} required /></div>
+                          <div className="field"><label>Fecha</label><input type="date" value={nuevoVuelo.date} onChange={(e) => setNuevoVuelo({ ...nuevoVuelo, date: e.target.value })} required /></div>
+                          <div className="field"><label>Notas (opcional)</label><input value={nuevoVuelo.notes} onChange={(e) => setNuevoVuelo({ ...nuevoVuelo, notes: e.target.value })} /></div>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button className="btn" style={{ padding: '5px 12px', fontSize: 12 }}>Guardar vuelo</button>
+                            <button type="button" className="btn secondary" style={{ padding: '5px 12px', fontSize: 12 }} onClick={() => setMostrarNuevoVuelo(false)}>Cancelar</button>
+                          </div>
+                        </form>
+                      )}
+
+                      {cargandoFlightLogs && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Cargando...</div>}
+                      {!cargandoFlightLogs && flightLogs.length === 0 && (
+                        <div className="card" style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>🛩️ Sin vuelos registrados todavía.</div>
+                      )}
+                      <div style={{ display: 'grid', gap: 8 }}>
+                        {flightLogs.map((f) => (
+                          <div key={f.id} className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderLeft: `4px solid ${COLOR_TIPO_SESION.VUELO}` }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <span style={{ fontSize: 22 }}>✈️</span>
+                              <div>
+                                <div style={{ fontSize: 13, fontWeight: 700 }}>{f.aircraftType.name}</div>
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                                  {new Date(f.date).toLocaleDateString('es-PE', { timeZone: 'UTC' })} · {f.createdBy.firstName} {f.createdBy.lastName}
+                                  {f.notes && ` · ${f.notes}`}
+                                </div>
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <span style={{ fontWeight: 700, fontSize: 14 }}>{Number(f.hours).toFixed(1)} hrs</span>
+                              {puedeEditarHoras && (
+                                <button className="btn danger" style={{ padding: '3px 8px', fontSize: 10 }} onClick={() => eliminarVuelo(f)}>Eliminar</button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {subTabHoras === 'simulador' && (
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                        <div style={{ fontSize: 15, fontWeight: 700 }}>🎮 {Number(edit.simulatorHours).toFixed(1)} horas totales</div>
+                        {puedeEditarHoras && !mostrarNuevoSimulador && (
+                          <button className="btn secondary" style={{ padding: '5px 12px', fontSize: 12 }} onClick={() => setMostrarNuevoSimulador(true)}>+ Registrar sesión</button>
                         )}
                       </div>
-                    ))}
-                  </div>
+
+                      {mostrarNuevoSimulador && (
+                        <form onSubmit={registrarSimulador} className="card" style={{ marginBottom: 12, borderLeft: `4px solid ${COLOR_TIPO_SESION.SIMULADOR}` }}>
+                          <div className="field">
+                            <label>Tipo de simulador</label>
+                            <select value={nuevoSimulador.simulatorTypeId} onChange={(e) => setNuevoSimulador({ ...nuevoSimulador, simulatorTypeId: e.target.value })}>
+                              <option value="">Selecciona el tipo de simulador</option>
+                              {simulatorTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                            </select>
+                          </div>
+                          <div className="field"><label>Horas</label><input type="number" step="0.1" value={nuevoSimulador.hours} onChange={(e) => setNuevoSimulador({ ...nuevoSimulador, hours: e.target.value })} required /></div>
+                          <div className="field"><label>Fecha</label><input type="date" value={nuevoSimulador.date} onChange={(e) => setNuevoSimulador({ ...nuevoSimulador, date: e.target.value })} required /></div>
+                          <div className="field"><label>Notas (opcional)</label><input value={nuevoSimulador.notes} onChange={(e) => setNuevoSimulador({ ...nuevoSimulador, notes: e.target.value })} /></div>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button className="btn" style={{ padding: '5px 12px', fontSize: 12 }}>Guardar sesión</button>
+                            <button type="button" className="btn secondary" style={{ padding: '5px 12px', fontSize: 12 }} onClick={() => setMostrarNuevoSimulador(false)}>Cancelar</button>
+                          </div>
+                        </form>
+                      )}
+
+                      {cargandoSimulatorLogs && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Cargando...</div>}
+                      {!cargandoSimulatorLogs && simulatorLogs.length === 0 && (
+                        <div className="card" style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>🎮 Sin sesiones de simulador registradas todavía.</div>
+                      )}
+                      <div style={{ display: 'grid', gap: 8 }}>
+                        {simulatorLogs.map((s) => (
+                          <div key={s.id} className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderLeft: `4px solid ${COLOR_TIPO_SESION.SIMULADOR}` }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <span style={{ fontSize: 22 }}>🕹️</span>
+                              <div>
+                                <div style={{ fontSize: 13, fontWeight: 700 }}>{s.simulatorType.name}</div>
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                                  {new Date(s.date).toLocaleDateString('es-PE', { timeZone: 'UTC' })} · {s.createdBy.firstName} {s.createdBy.lastName}
+                                  {s.notes && ` · ${s.notes}`}
+                                </div>
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <span style={{ fontWeight: 700, fontSize: 14 }}>{Number(s.hours).toFixed(1)} hrs</span>
+                              {puedeEditarHoras && (
+                                <button className="btn danger" style={{ padding: '3px 8px', fontSize: 10 }} onClick={() => eliminarSimulador(s)}>Eliminar</button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -921,14 +1046,31 @@ export default function Alumnos() {
                 <div>
                   {puedeGestionarProgramaciones && (
                     <form onSubmit={programarSesion} className="card" style={{ marginBottom: 16 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Programar sesión nueva</div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                        <div className="field">
-                          <label>Tipo</label>
-                          <select value={nuevaSesion.type} onChange={(e) => setNuevaSesion({ ...nuevaSesion, type: e.target.value })}>
-                            {TIPOS_SESION.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                          </select>
+                      <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 10 }}>Programar sesión nueva</div>
+
+                      <div style={{ marginBottom: 12 }}>
+                        <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Tipo</label>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          {TIPOS_SESION.map((t) => (
+                            <button
+                              key={t.value}
+                              type="button"
+                              onClick={() => setNuevaSesion({ ...nuevaSesion, type: t.value })}
+                              style={{
+                                flex: 1, padding: '10px 8px', borderRadius: 10, cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                                border: nuevaSesion.type === t.value ? `2px solid ${t.color}` : '2px solid var(--border)',
+                                background: nuevaSesion.type === t.value ? `${t.color}14` : '#fff',
+                                color: nuevaSesion.type === t.value ? t.color : 'var(--text)',
+                              }}
+                            >
+                              <div style={{ fontSize: 18, marginBottom: 2 }}>{ICONO_TIPO[t.value]}</div>
+                              {t.label}
+                            </button>
+                          ))}
                         </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                         <div className="field">
                           <label>Instructor</label>
                           <select value={nuevaSesion.instructorId} onChange={(e) => setNuevaSesion({ ...nuevaSesion, instructorId: e.target.value })}>
@@ -962,34 +1104,42 @@ export default function Alumnos() {
                       <button className="btn" style={{ marginTop: 10 }} disabled={guardandoSesion}>
                         {guardandoSesion ? 'Programando...' : 'Programar sesión'}
                       </button>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
-                        Esta sesión aparecerá automáticamente en el calendario de Programaciones{(nuevaSesion.type === 'VUELO' || nuevaSesion.type === 'SIMULADOR') && ', y las horas se sumarán al historial correspondiente'}.
-                      </div>
+                      {(nuevaSesion.type === 'VUELO' || nuevaSesion.type === 'SIMULADOR') && (
+                        <div style={{ fontSize: 11, color: 'var(--success)', marginTop: 6 }}>
+                          ✓ Esto también sumará las horas al historial de {nuevaSesion.type === 'VUELO' ? 'Vuelo' : 'Simulador'} automáticamente.
+                        </div>
+                      )}
                     </form>
                   )}
 
-                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Sesiones programadas</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Sesiones programadas</div>
                   {cargandoSesiones && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Cargando...</div>}
                   {!cargandoSesiones && sesionesAlumno.length === 0 && (
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Este alumno no tiene sesiones programadas.</div>
+                    <div className="card" style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>🗓️ Este alumno no tiene sesiones programadas.</div>
                   )}
-                  {!cargandoSesiones && sesionesAlumno.map((s) => (
-                    <div key={s.id} style={{ marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: COLOR_TIPO_SESION[s.type], display: 'inline-block' }} />
-                        <strong style={{ fontSize: 13 }}>{LABEL_TIPO_SESION[s.type]}</strong>
-                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                          {new Date(s.date).toLocaleDateString('es-PE', { day: 'numeric', month: 'short', timeZone: 'UTC' })}, {s.startTime}–{s.endTime}
-                        </span>
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    {sesionesAlumno.map((s) => (
+                      <div key={s.id} className="card" style={{ borderLeft: `4px solid ${COLOR_TIPO_SESION[s.type]}` }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{ fontSize: 16 }}>{ICONO_TIPO[s.type]}</span>
+                              <strong style={{ fontSize: 13 }}>{LABEL_TIPO_SESION[s.type]}</strong>
+                              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                                {new Date(s.date).toLocaleDateString('es-PE', { day: 'numeric', month: 'short', timeZone: 'UTC' })}, {s.startTime}–{s.endTime}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: 12, marginTop: 2, color: 'var(--text-muted)' }}>Instructor: {s.instructor.firstName} {s.instructor.lastName}</div>
+                          </div>
+                          {puedeGestionarProgramaciones && (
+                            <button className="btn danger" style={{ padding: '3px 8px', fontSize: 10 }} onClick={() => eliminarSesionAlumno(s.id)}>
+                              Eliminar
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <div style={{ fontSize: 12, marginTop: 2 }}>Instructor: {s.instructor.firstName} {s.instructor.lastName}</div>
-                      {puedeGestionarProgramaciones && (
-                        <button className="btn danger" style={{ padding: '2px 8px', fontSize: 10, marginTop: 4 }} onClick={() => eliminarSesionAlumno(s.id)}>
-                          Eliminar
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -998,47 +1148,52 @@ export default function Alumnos() {
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
                       <button className="btn secondary" style={{ padding: '5px 12px', fontSize: 12 }} onClick={verEstadoDeCuenta}>
-                        Estado de cuenta (PDF)
+                        📄 Estado de cuenta (PDF)
                       </button>
                     </div>
 
                     {cargandoCuotas && <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Cargando...</div>}
                     {!cargandoCuotas && cuotas.length === 0 && (
-                      <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 10 }}>Sin cuotas registradas.</div>
+                      <div className="card" style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, marginBottom: 10 }}>💳 Sin cuotas registradas.</div>
                     )}
-                    {!cargandoCuotas && cuotas.map((c) => {
-                      const vencida = !c.paidDate && new Date(c.dueDate) < new Date();
-                      return (
-                        <div key={c.id} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid var(--border)' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                            <strong>{c.concept}</strong>
-                            <span>{SIMBOLO_MONEDA[c.currency] || 'S/'} {Number(c.amount).toFixed(2)}</span>
-                          </div>
-                          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                            Vence: {new Date(c.dueDate).toLocaleDateString('es-PE', { timeZone: 'UTC' })}
-                            {' · '}
-                            {c.paidDate ? `Pagada el ${new Date(c.paidDate).toLocaleDateString('es-PE')}` : vencida ? 'Vencida' : 'Pendiente'}
-                          </div>
-                          {c.paidDate && c.paidBy && (
-                            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                              Autorizado por: {c.paidBy.firstName} {c.paidBy.lastName}
+                    <div style={{ display: 'grid', gap: 8, marginBottom: 12 }}>
+                      {cuotas.map((c) => {
+                        const vencida = !c.paidDate && new Date(c.dueDate) < new Date();
+                        const colorEstado = c.paidDate ? 'var(--success)' : vencida ? 'var(--danger)' : '#e0a013';
+                        return (
+                          <div key={c.id} className="card" style={{ borderLeft: `4px solid ${colorEstado}` }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
+                              <strong>💰 {c.concept}</strong>
+                              <span style={{ fontWeight: 700 }}>{SIMBOLO_MONEDA[c.currency] || 'S/'} {Number(c.amount).toFixed(2)}</span>
                             </div>
-                          )}
-                          <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-                            <button className="btn secondary" style={{ padding: '3px 10px', fontSize: 11 }} onClick={() => alternarPagada(c)}>
-                              {c.paidDate ? 'Marcar pendiente' : 'Marcar pagada'}
-                            </button>
-                            <button className="btn secondary" style={{ padding: '3px 10px', fontSize: 11 }} onClick={() => verBoletaPago(c)}>
-                              Boleta (PDF)
-                            </button>
-                            <button className="btn danger" style={{ padding: '3px 10px', fontSize: 11 }} onClick={() => eliminarCuota(c.id)}>Eliminar</button>
+                            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                              Vence: {new Date(c.dueDate).toLocaleDateString('es-PE', { timeZone: 'UTC' })}
+                              {' · '}
+                              <span style={{ color: colorEstado, fontWeight: 600 }}>
+                                {c.paidDate ? `✓ Pagada el ${new Date(c.paidDate).toLocaleDateString('es-PE')}` : vencida ? '⚠ Vencida' : '⏳ Pendiente'}
+                              </span>
+                            </div>
+                            {c.paidDate && c.paidBy && (
+                              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                                Autorizado por: {c.paidBy.firstName} {c.paidBy.lastName}
+                              </div>
+                            )}
+                            <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                              <button className="btn secondary" style={{ padding: '3px 10px', fontSize: 11 }} onClick={() => alternarPagada(c)}>
+                                {c.paidDate ? 'Marcar pendiente' : 'Marcar pagada'}
+                              </button>
+                              <button className="btn secondary" style={{ padding: '3px 10px', fontSize: 11 }} onClick={() => verBoletaPago(c)}>
+                                📄 Boleta
+                              </button>
+                              <button className="btn danger" style={{ padding: '3px 10px', fontSize: 11 }} onClick={() => eliminarCuota(c.id)}>Eliminar</button>
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
 
                     {mostrarNuevaCuota ? (
-                      <form onSubmit={crearCuota} style={{ marginTop: 8 }}>
+                      <form onSubmit={crearCuota} className="card">
                         <div className="field"><label>Concepto</label><input value={nuevaCuota.concept} onChange={(e) => setNuevaCuota({ ...nuevaCuota, concept: e.target.value })} placeholder="Ej: Cuota 1" required /></div>
                         <div className="field">
                           <label>Moneda</label>
@@ -1073,7 +1228,7 @@ export default function Alumnos() {
                     )}
                   </div>
                 ) : (
-                  <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No tienes permiso para ver la información de pagos de este alumno.</div>
+                  <div className="card" style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>🔒 No tienes permiso para ver la información de pagos de este alumno.</div>
                 )
               )}
             </div>
