@@ -1,4 +1,6 @@
 const prisma = require('../lib/prisma');
+const { enviarCorreo } = require('./email');
+const { enviarPush } = require('./webpush');
 
 let ioInstance = null;
 
@@ -6,15 +8,12 @@ function setIO(io) {
   ioInstance = io;
 }
 
-// Cada usuario, al conectarse por socket, se une a una "sala" con su propio id
-// (ver src/index.js). Así podemos mandarle notificaciones solo a él.
 function salaDeUsuario(userId) {
   return `user:${userId}`;
 }
 
-// Crea la notificación en la base de datos Y la manda en tiempo real
-// si el usuario está conectado. type: "SISTEMA" | "ANUNCIO" | "SOLICITUD" |
-// "PROGRAMACION" | "VACACIONES" | "CHAT" | "DOCUMENTO"
+// Crea la notificación en la base de datos, la manda en tiempo real por
+// socket, Y ADEMÁS manda un correo y una notificación push al celular/navegador.
 async function notificar({ userId, type, title, message, link = null }) {
   const noti = await prisma.notification.create({
     data: { userId, type, title, message, link },
@@ -24,11 +23,15 @@ async function notificar({ userId, type, title, message, link = null }) {
     ioInstance.to(salaDeUsuario(userId)).emit('notificacion:nueva', noti);
   }
 
+  prisma.user.findUnique({ where: { id: userId }, select: { email: true } })
+    .then((u) => u?.email && enviarCorreo({ to: u.email, subject: title, message, link }))
+    .catch(() => {});
+
+  enviarPush(userId, { title, message, link }).catch(() => {});
+
   return noti;
 }
 
-// Manda cualquier evento en tiempo real a un usuario puntual, sin crear una
-// notificación guardada (se usa para el chat: el mensaje ya se guarda aparte).
 function emitirAUsuario(userId, evento, payload) {
   if (ioInstance) {
     ioInstance.to(salaDeUsuario(userId)).emit(evento, payload);
