@@ -22,6 +22,8 @@ const coursesRoutes = require('./routes/courses');
 const studentsRoutes = require('./routes/students');
 const schedulesRoutes = require('./routes/schedules');
 const requestsRoutes = require('./routes/requests');
+const pushRoutes = require('./routes/push');
+const paymentsRoutes = require('./routes/payments');
 const { setIO, salaDeUsuario } = require('./utils/socket');
 
 const app = express();
@@ -50,25 +52,21 @@ app.use('/api/courses', coursesRoutes);
 app.use('/api/students', studentsRoutes);
 app.use('/api/schedules', schedulesRoutes);
 app.use('/api/requests', requestsRoutes);
+app.use('/api/push', pushRoutes);
+app.use('/api/payments', paymentsRoutes);
 
-// Manejador de errores general: si una ruta falla sin haberlo previsto,
-// devolvemos un mensaje claro en vez de que el navegador reciba una
-// respuesta vacía o incomprensible.
 app.use((err, req, res, next) => {
   console.error(err);
   if (err?.code === 'P2002') {
-    // Error típico de Prisma: se intentó guardar un valor único (correo, usuario) duplicado
     return res.status(400).json({ error: 'Ya existe un registro con ese dato único (correo o usuario duplicado)' });
   }
   res.status(500).json({ error: 'Ocurrió un error inesperado en el servidor' });
 });
 
-// --- Socket.io: tiempo real (notificaciones, y luego chat/solicitudes) ---
 const io = new Server(server, {
   cors: { origin: FRONTEND_URL },
 });
 
-// Cada conexión de socket debe mandar su token para saber quién es
 io.use((socket, next) => {
   try {
     const token = socket.handshake.auth?.token;
@@ -82,7 +80,6 @@ io.use((socket, next) => {
 });
 
 io.on('connection', (socket) => {
-  // Cada usuario entra a su propia "sala" -> así le llegan solo sus notificaciones
   socket.join(salaDeUsuario(socket.user.id));
 });
 
