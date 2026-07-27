@@ -3,14 +3,20 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api/client';
 import { conectarSocket } from '../socket';
 import { reproducirSonidoNotificacion } from '../utils/sonido';
+import { activarNotificacionesPush, estaActivadoPush } from '../utils/push';
 
 export default function NotificationBell() {
   const navigate = useNavigate();
   const [abierto, setAbierto] = useState(false);
   const [notis, setNotis] = useState([]);
+  const [pushActivo, setPushActivo] = useState(false);
+  const [activandoPush, setActivandoPush] = useState(false);
+  const [errorPush, setErrorPush] = useState('');
 
   useEffect(() => {
     cargar();
+    estaActivadoPush().then(setPushActivo);
+
     const socket = conectarSocket();
     if (socket) {
       socket.on('notificacion:nueva', (noti) => {
@@ -26,8 +32,6 @@ export default function NotificationBell() {
     setNotis(data);
   }
 
-  // Al abrir la campana, se marca todo como leído de una — así ya no hay que
-  // ir clic por clic para que desaparezca la bolita.
   async function alternarAbierto() {
     const abriendola = !abierto;
     setAbierto(abriendola);
@@ -42,6 +46,19 @@ export default function NotificationBell() {
     if (n.link) navigate(n.link);
   }
 
+  async function activarPush() {
+    setActivandoPush(true);
+    setErrorPush('');
+    try {
+      await activarNotificacionesPush();
+      setPushActivo(true);
+    } catch (err) {
+      setErrorPush(err.message || 'No se pudo activar');
+    } finally {
+      setActivandoPush(false);
+    }
+  }
+
   const noLeidas = notis.filter((n) => !n.read).length;
 
   return (
@@ -53,9 +70,22 @@ export default function NotificationBell() {
 
       {abierto && (
         <div className="notif-panel">
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--border)' }}>
             <strong style={{ fontSize: 13 }}>Notificaciones</strong>
+            {!pushActivo ? (
+              <button
+                onClick={activarPush}
+                disabled={activandoPush}
+                style={{ background: 'none', border: 'none', color: 'var(--primary-light)', fontSize: 11, cursor: 'pointer' }}
+              >
+                {activandoPush ? 'Activando...' : 'Activar en este dispositivo'}
+              </button>
+            ) : (
+              <span style={{ fontSize: 11, color: 'var(--success)' }}>Push activo ✓</span>
+            )}
           </div>
+
+          {errorPush && <div className="error-text" style={{ padding: '4px 14px', fontSize: 11 }}>{errorPush}</div>}
 
           {notis.length === 0 && (
             <div style={{ padding: 16, fontSize: 13, color: 'var(--text-muted)' }}>
