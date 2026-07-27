@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -77,6 +78,7 @@ export default function Alumnos() {
   const puedeGestionarProgramaciones = ['ADMIN', 'GERENCIA', 'INSTRUCTOR'].includes(user?.role);
 
   const [tab, setTab] = useState('lista');
+  const [searchParams, setSearchParams] = useSearchParams();
   const [alumnos, setAlumnos] = useState([]);
   const [cursos, setCursos] = useState([]);
   const [instructores, setInstructores] = useState([]);
@@ -140,6 +142,15 @@ export default function Alumnos() {
     });
   }, []);
   useEffect(() => { cargarAlumnos(); }, [busqueda]);
+
+  useEffect(() => {
+    const desdeBusqueda = searchParams.get('buscar');
+    if (desdeBusqueda) {
+      setTab('lista');
+      setBusqueda(desdeBusqueda);
+      setSearchParams({}, { replace: true });
+    }
+  }, []);
 
   async function cargarAlumnos() {
     const { data } = await api.get('/students', { params: { q: busqueda || undefined } });
