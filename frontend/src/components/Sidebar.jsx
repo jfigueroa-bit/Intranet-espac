@@ -9,7 +9,6 @@ export default function Sidebar() {
   return (
     <div className="sidebar">
       <div className="logo">ESPAC · Intranet</div>
-
       <NavLink to="/" end>Inicio</NavLink>
       <NavLink to="/anuncios">Anuncios</NavLink>
       <NavLink to="/calendario">Calendario</NavLink>
@@ -28,15 +27,15 @@ export default function Sidebar() {
           </span>
         )}
       </NavLink>
-
       <NavLink to="/alumnos">Alumnos</NavLink>
       <NavLink to="/programaciones">Programaciones</NavLink>
       <NavLink to="/solicitudes">Solicitudes</NavLink>
-
+      {(user?.role === 'ADMIN' || user?.role === 'GERENCIA') && (
+        <NavLink to="/reportes">📊 Reportes</NavLink>
+      )}
       {(user?.role === 'ADMIN' || user?.role === 'RRHH') && (
         <NavLink to="/horarios">Horarios</NavLink>
       )}
-
       {user?.role === 'ADMIN' && (
         <>
           <div style={{ fontSize: 11, opacity: 0.6, margin: '16px 8px 4px' }}>ADMINISTRACIÓN</div>
@@ -44,7 +43,6 @@ export default function Sidebar() {
           <NavLink to="/admin/areas">Áreas / Tags</NavLink>
         </>
       )}
-
       <div style={{ marginTop: 'auto' }}>
         <button className="btn secondary" style={{ width: '100%' }} onClick={logout}>
           Cerrar sesión
