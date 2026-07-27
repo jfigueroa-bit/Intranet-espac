@@ -3,8 +3,8 @@ import * as XLSX from 'xlsx';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { COLOR_TIPO_SESION, LABEL_TIPO_SESION } from '../utils/programaciones';
+import { construirEstadoCuentaHTML } from '../utils/estadoCuenta';
 
-// Convierte encabezados de Excel en español/inglés, con o sin tildes, a nuestras claves internas
 function normalizar(texto) {
   return (texto || '')
     .toString()
@@ -68,7 +68,18 @@ export default function Alumnos() {
   const [sesionesAlumno, setSesionesAlumno] = useState([]);
   const [cargandoSesiones, setCargandoSesiones] = useState(false);
 
-  useEffect(() => { cargarCursos(); }, []);
+  const [puedeVerPagos, setPuedeVerPagos] = useState(false);
+  const [cuotas, setCuotas] = useState([]);
+  const [cargandoCuotas, setCargandoCuotas] = useState(false);
+  const [nuevaCuota, setNuevaCuota] = useState({ concept: '', amount: '', dueDate: '' });
+  const [mostrarNuevaCuota, setMostrarNuevaCuota] = useState(false);
+
+  useEffect(() => {
+    cargarCursos();
+    api.get('/auth/me').then((res) => {
+      setPuedeVerPagos(res.data.canViewPayments || ['ADMIN', 'GERENCIA'].includes(res.data.role));
+    });
+  }, []);
   useEffect(() => { cargarAlumnos(); }, [busqueda]);
 
   async function cargarAlumnos() {
@@ -93,6 +104,7 @@ export default function Alumnos() {
     });
     setError('');
     cargarSesionesAlumno(alumno.id);
+    if (puedeVerPagos) cargarCuotasAlumno(alumno.id);
   }
 
   async function cargarSesionesAlumno(studentId) {
@@ -109,6 +121,49 @@ export default function Alumnos() {
     if (!confirm('¿Eliminar esta sesión programada? Se notificará al instructor.')) return;
     await api.delete(`/schedules/${id}`);
     cargarSesionesAlumno(seleccionado.id);
+  }
+
+  async function cargarCuotasAlumno(studentId) {
+    setCargandoCuotas(true);
+    try {
+      const { data } = await api.get('/payments', { params: { studentId } });
+      setCuotas(data);
+    } catch {
+      setCuotas([]);
+    } finally {
+      setCargandoCuotas(false);
+    }
+  }
+
+  async function crearCuota(e) {
+    e.preventDefault();
+    setError('');
+    try {
+      await api.post('/payments', { ...nuevaCuota, studentId: seleccionado.id });
+      setNuevaCuota({ concept: '', amount: '', dueDate: '' });
+      setMostrarNuevaCuota(false);
+      cargarCuotasAlumno(seleccionado.id);
+    } catch (err) {
+      setError(err.response?.data?.error || 'No se pudo registrar la cuota');
+    }
+  }
+
+  async function alternarPagada(cuota) {
+    await api.patch(`/payments/${cuota.id}`, { marcarPagada: !cuota.paidDate });
+    cargarCuotasAlumno(seleccionado.id);
+  }
+
+  async function eliminarCuota(id) {
+    if (!confirm('¿Eliminar esta cuota?')) return;
+    await api.delete(`/payments/${id}`);
+    cargarCuotasAlumno(seleccionado.id);
+  }
+
+  function verEstadoDeCuenta() {
+    const html = construirEstadoCuentaHTML({ alumno: seleccionado, cuotas });
+    const ventana = window.open('', '_blank');
+    ventana.document.write(html);
+    ventana.document.close();
   }
 
   async function guardarFicha() {
@@ -129,10 +184,15 @@ export default function Alumnos() {
   }
 
   async function eliminarAlumno(id) {
-    if (!confirm('¿Eliminar a este alumno? Esta acción no se puede deshacer.')) return;
-    await api.delete(`/students/${id}`);
-    setSeleccionado(null);
-    cargarAlumnos();
+    if (!confirm('¿Eliminar a este alumno? Esta acción no se puede deshacer, y también se eliminarán sus sesiones programadas.')) return;
+    setError('');
+    try {
+      await api.delete(`/students/${id}`);
+      setSeleccionado(null);
+      cargarAlumnos();
+    } catch (err) {
+      setError(err.response?.data?.error || 'No se pudo eliminar el alumno');
+    }
   }
 
   async function crearAlumno(e) {
@@ -368,6 +428,58 @@ export default function Alumnos() {
                   </div>
                 ))}
               </div>
+
+              {puedeVerPagos && (
+                <div style={{ borderTop: '1px solid var(--border)', marginTop: 14, paddingTop: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>Cuotas / Pagos</div>
+                    <button className="btn secondary" style={{ padding: '3px 8px', fontSize: 11 }} onClick={verEstadoDeCuenta}>
+                      Estado de cuenta (PDF)
+                    </button>
+                  </div>
+
+                  {cargandoCuotas && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Cargando...</div>}
+                  {!cargandoCuotas && cuotas.length === 0 && (
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>Sin cuotas registradas.</div>
+                  )}
+                  {!cargandoCuotas && cuotas.map((c) => {
+                    const vencida = !c.paidDate && new Date(c.dueDate) < new Date();
+                    return (
+                      <div key={c.id} style={{ marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                          <strong>{c.concept}</strong>
+                          <span>S/ {Number(c.amount).toFixed(2)}</span>
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                          Vence: {new Date(c.dueDate).toLocaleDateString('es-PE', { timeZone: 'UTC' })}
+                          {' · '}
+                          {c.paidDate ? `Pagada el ${new Date(c.paidDate).toLocaleDateString('es-PE')}` : vencida ? 'Vencida' : 'Pendiente'}
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                          <button className="btn secondary" style={{ padding: '2px 8px', fontSize: 10 }} onClick={() => alternarPagada(c)}>
+                            {c.paidDate ? 'Marcar pendiente' : 'Marcar pagada'}
+                          </button>
+                          <button className="btn danger" style={{ padding: '2px 8px', fontSize: 10 }} onClick={() => eliminarCuota(c.id)}>Eliminar</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {mostrarNuevaCuota ? (
+                    <form onSubmit={crearCuota} style={{ marginTop: 8 }}>
+                      <div className="field"><label>Concepto</label><input value={nuevaCuota.concept} onChange={(e) => setNuevaCuota({ ...nuevaCuota, concept: e.target.value })} placeholder="Ej: Cuota 1" required /></div>
+                      <div className="field"><label>Monto (S/)</label><input type="number" step="0.01" value={nuevaCuota.amount} onChange={(e) => setNuevaCuota({ ...nuevaCuota, amount: e.target.value })} required /></div>
+                      <div className="field"><label>Fecha de vencimiento</label><input type="date" value={nuevaCuota.dueDate} onChange={(e) => setNuevaCuota({ ...nuevaCuota, dueDate: e.target.value })} required /></div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button className="btn" style={{ padding: '4px 10px', fontSize: 12 }}>Guardar cuota</button>
+                        <button type="button" className="btn secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => setMostrarNuevaCuota(false)}>Cancelar</button>
+                      </div>
+                    </form>
+                  ) : (
+                    <button className="btn secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => setMostrarNuevaCuota(true)}>+ Nueva cuota</button>
+                  )}
+                </div>
+              )}
 
               {error && <div className="error-text">{error}</div>}
 
