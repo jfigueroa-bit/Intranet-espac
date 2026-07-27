@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { TIPOS_SESION, COLOR_TIPO_SESION, LABEL_TIPO_SESION } from '../utils/programaciones';
 import { construirEstadoCuentaHTML } from '../utils/estadoCuenta';
 import { construirReporteHorasHTML } from '../utils/reporteHoras';
+import { construirBoletaPagoHTML } from '../utils/boletaPago';
 import Modal from '../components/Modal.jsx';
 
 function normalizar(texto) {
@@ -242,6 +243,13 @@ export default function Alumnos() {
 
   function verEstadoDeCuenta() {
     const html = construirEstadoCuentaHTML({ alumno: seleccionado, cuotas });
+    const ventana = window.open('', '_blank');
+    ventana.document.write(html);
+    ventana.document.close();
+  }
+
+  function verBoletaPago(cuota) {
+    const html = construirBoletaPagoHTML({ alumno: seleccionado, cuota });
     const ventana = window.open('', '_blank');
     ventana.document.write(html);
     ventana.document.close();
@@ -697,9 +705,17 @@ export default function Alumnos() {
                             {' · '}
                             {c.paidDate ? `Pagada el ${new Date(c.paidDate).toLocaleDateString('es-PE')}` : vencida ? 'Vencida' : 'Pendiente'}
                           </div>
+                          {c.paidDate && c.paidBy && (
+                            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                              Autorizado por: {c.paidBy.firstName} {c.paidBy.lastName}
+                            </div>
+                          )}
                           <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
                             <button className="btn secondary" style={{ padding: '3px 10px', fontSize: 11 }} onClick={() => alternarPagada(c)}>
                               {c.paidDate ? 'Marcar pendiente' : 'Marcar pagada'}
+                            </button>
+                            <button className="btn secondary" style={{ padding: '3px 10px', fontSize: 11 }} onClick={() => verBoletaPago(c)}>
+                              Boleta (PDF)
                             </button>
                             <button className="btn danger" style={{ padding: '3px 10px', fontSize: 11 }} onClick={() => eliminarCuota(c.id)}>Eliminar</button>
                           </div>
