@@ -95,6 +95,7 @@ model User {
   solicitudesCreadas     Request[] @relation("SolicitudesCreadas")
   solicitudesRecibidas   Request[] @relation("SolicitudesRecibidas")
   pagosCreados           Payment[]
+  pagosAutorizados       Payment[] @relation("PagosAutorizados")
   suscripcionesPush      PushSubscription[]
 }
 
@@ -392,6 +393,8 @@ model Payment {
   currency    String    @default("PEN") // PEN (soles) | USD (dólares)
   dueDate     DateTime  // fecha de vencimiento
   paidDate    DateTime? // null = todavía no se ha pagado
+  paidById    Int?      // quién marcó el pago como realizado
+  paidBy      User?     @relation("PagosAutorizados", fields: [paidById], references: [id])
   notes       String?
   createdById Int
   createdBy   User      @relation(fields: [createdById], references: [id])
