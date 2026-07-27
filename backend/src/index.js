@@ -30,6 +30,7 @@ const simulatorTypesRoutes = require('./routes/simulatorTypes');
 const flightLogsRoutes = require('./routes/flightLogs');
 const simulatorLogsRoutes = require('./routes/simulatorLogs');
 const searchRoutes = require('./routes/search');
+const reportsRoutes = require('./routes/reports');
 const { setIO, salaDeUsuario } = require('./utils/socket');
 
 const app = express();
@@ -66,6 +67,7 @@ app.use('/api/simulator-types', simulatorTypesRoutes);
 app.use('/api/flight-logs', flightLogsRoutes);
 app.use('/api/simulator-logs', simulatorLogsRoutes);
 app.use('/api/search', searchRoutes);
+app.use('/api/reports', reportsRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);
