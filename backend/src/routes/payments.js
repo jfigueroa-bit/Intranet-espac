@@ -26,9 +26,12 @@ router.get('/', requireAuth, requireVerPagos, async (req, res) => {
 });
 
 router.post('/', requireAuth, requireVerPagos, async (req, res) => {
-  const { studentId, concept, amount, dueDate, notes } = req.body;
+  const { studentId, concept, amount, currency, dueDate, notes } = req.body;
   if (!studentId || !concept?.trim() || !amount || !dueDate) {
     return res.status(400).json({ error: 'Faltan datos de la cuota (alumno, concepto, monto y fecha de vencimiento)' });
+  }
+  if (currency && !['PEN', 'USD'].includes(currency)) {
+    return res.status(400).json({ error: 'Moneda no válida' });
   }
 
   const cuota = await prisma.payment.create({
@@ -36,6 +39,7 @@ router.post('/', requireAuth, requireVerPagos, async (req, res) => {
       studentId: Number(studentId),
       concept: concept.trim(),
       amount: Number(amount),
+      currency: currency || 'PEN',
       dueDate: new Date(dueDate),
       notes: notes || null,
       createdById: req.user.id,
@@ -47,11 +51,16 @@ router.post('/', requireAuth, requireVerPagos, async (req, res) => {
 
 router.patch('/:id', requireAuth, requireVerPagos, async (req, res) => {
   const id = Number(req.params.id);
-  const { concept, amount, dueDate, notes, marcarPagada } = req.body;
+  const { concept, amount, currency, dueDate, notes, marcarPagada } = req.body;
+
+  if (currency !== undefined && !['PEN', 'USD'].includes(currency)) {
+    return res.status(400).json({ error: 'Moneda no válida' });
+  }
 
   const data = {};
   if (concept !== undefined) data.concept = concept;
   if (amount !== undefined) data.amount = Number(amount);
+  if (currency !== undefined) data.currency = currency;
   if (dueDate !== undefined) data.dueDate = new Date(dueDate);
   if (notes !== undefined) data.notes = notes || null;
   if (marcarPagada !== undefined) data.paidDate = marcarPagada ? new Date() : null;
