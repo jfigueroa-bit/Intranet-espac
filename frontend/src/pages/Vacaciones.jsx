@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
 
-const ESTADO_LABEL = { PENDIENTE: 'Pendiente', APROBADA: 'Aprobada', RECHAZADA: 'Rechazada' };
+const ESTADO_LABEL = { PENDIENTE: '⏳ Pendiente', APROBADA: '✓ Aprobada', RECHAZADA: '✕ Rechazada' };
 const ESTADO_COLOR = { PENDIENTE: '#c9a227', APROBADA: '#2e7d32', RECHAZADA: '#b3261e' };
 
 function Badge({ status }) {
   return (
     <span style={{
-      display: 'inline-block', padding: '2px 10px', borderRadius: 999, fontSize: 12, fontWeight: 600,
+      display: 'inline-block', padding: '3px 12px', borderRadius: 999, fontSize: 12, fontWeight: 600,
       background: ESTADO_COLOR[status] + '22', color: ESTADO_COLOR[status],
     }}>
       {ESTADO_LABEL[status]}
@@ -126,43 +126,43 @@ export default function Vacaciones() {
 
   return (
     <div style={{ maxWidth: 780 }}>
-      <h2 style={{ marginTop: 0 }}>Vacaciones</h2>
+      <h2 style={{ marginTop: 0 }}>🌴 Vacaciones</h2>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
         <button className={`btn ${tab === 'mias' ? '' : 'secondary'}`} style={{ padding: '6px 16px', fontSize: 13 }} onClick={() => setTab('mias')}>
-          Mis vacaciones
+          🧳 Mis vacaciones
         </button>
         {puedeVerSolicitudes && (
           <button className={`btn ${tab === 'solicitudes' ? '' : 'secondary'}`} style={{ padding: '6px 16px', fontSize: 13 }} onClick={() => setTab('solicitudes')}>
-            Solicitudes
+            📋 Solicitudes
           </button>
         )}
         {puedeConfigurarDias && (
           <button className={`btn ${tab === 'dias' ? '' : 'secondary'}`} style={{ padding: '6px 16px', fontSize: 13 }} onClick={() => setTab('dias')}>
-            Días asignados
+            ⚙️ Días asignados
           </button>
         )}
       </div>
 
       {tab === 'mias' && perfil && (
         <div>
-          <div className="card" style={{ marginBottom: 16, display: 'flex', gap: 32 }}>
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Días totales</div>
-              <div style={{ fontSize: 22, fontWeight: 700 }}>{perfil.vacationDaysTotal}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
+            <div className="card" style={{ textAlign: 'center', padding: '18px 10px' }}>
+              <div style={{ fontSize: 24, fontWeight: 700 }}>{perfil.vacationDaysTotal}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.03em', marginTop: 2 }}>Días totales</div>
             </div>
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Usados</div>
-              <div style={{ fontSize: 22, fontWeight: 700 }}>{perfil.vacationDaysUsed}</div>
+            <div className="card" style={{ textAlign: 'center', padding: '18px 10px' }}>
+              <div style={{ fontSize: 24, fontWeight: 700 }}>{perfil.vacationDaysUsed}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.03em', marginTop: 2 }}>Usados</div>
             </div>
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Disponibles</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--primary)' }}>{disponibles}</div>
+            <div className="card" style={{ textAlign: 'center', padding: '18px 10px' }}>
+              <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--primary)' }}>{disponibles}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.03em', marginTop: 2 }}>Disponibles</div>
             </div>
           </div>
 
           <form onSubmit={enviarSolicitud} className="card" style={{ marginBottom: 16 }}>
-            <h3 style={{ marginTop: 0, fontSize: 15 }}>Solicitar vacaciones</h3>
+            <h3 style={{ marginTop: 0, fontSize: 15 }}>✈️ Solicitar vacaciones</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div className="field">
                 <label>Desde</label>
@@ -181,39 +181,30 @@ export default function Vacaciones() {
             <button className="btn" disabled={enviando}>{enviando ? 'Enviando...' : 'Enviar solicitud'}</button>
           </form>
 
-          <div className="card">
-            <h3 style={{ marginTop: 0, fontSize: 15 }}>Mis solicitudes</h3>
-            <table>
-              <thead>
-                <tr>
-                  <th>Desde</th>
-                  <th>Hasta</th>
-                  <th>Días</th>
-                  <th>Motivo</th>
-                  <th>Estado</th>
-                </tr>
-              </thead>
-              <tbody>
-                {misSolicitudes.map((s) => (
-                  <tr key={s.id}>
-                    <td>{new Date(s.startDate).toLocaleDateString('es-PE', { timeZone: 'UTC' })}</td>
-                    <td>{new Date(s.endDate).toLocaleDateString('es-PE', { timeZone: 'UTC' })}</td>
-                    <td>{s.days}</td>
-                    <td>{s.reason || '—'}</td>
-                    <td>
-                      <Badge status={s.status} />
-                      {s.status === 'RECHAZADA' && s.decisionNote && (
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{s.decisionNote}</div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-                {misSolicitudes.length === 0 && (
-                  <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 16 }}>Todavía no has hecho ninguna solicitud.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Mis solicitudes</div>
+          {misSolicitudes.map((s) => (
+            <div key={s.id} className="card" style={{ marginBottom: 8, borderLeft: `4px solid ${ESTADO_COLOR[s.status]}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>
+                    {new Date(s.startDate).toLocaleDateString('es-PE', { timeZone: 'UTC' })} al {new Date(s.endDate).toLocaleDateString('es-PE', { timeZone: 'UTC' })}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    {s.days} día(s){s.reason ? ` · ${s.reason}` : ''}
+                  </div>
+                  {s.status === 'RECHAZADA' && s.decisionNote && (
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Motivo: {s.decisionNote}</div>
+                  )}
+                </div>
+                <Badge status={s.status} />
+              </div>
+            </div>
+          ))}
+          {misSolicitudes.length === 0 && (
+            <div className="card" style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+              🌴 Todavía no has hecho ninguna solicitud.
+            </div>
+          )}
         </div>
       )}
 
@@ -235,10 +226,10 @@ export default function Vacaciones() {
           {error && <div className="error-text" style={{ marginBottom: 12 }}>{error}</div>}
 
           {todas.map((s) => (
-            <div key={s.id} className="card" style={{ marginBottom: 12 }}>
+            <div key={s.id} className="card" style={{ marginBottom: 12, borderLeft: `4px solid ${ESTADO_COLOR[s.status]}` }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
-                  <div style={{ fontWeight: 600 }}>{s.user.firstName} {s.user.lastName}</div>
+                  <div style={{ fontWeight: 700 }}>👤 {s.user.firstName} {s.user.lastName}</div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                     {s.user.cargo || 'Sin cargo'} · {new Date(s.startDate).toLocaleDateString('es-PE', { timeZone: 'UTC' })} al{' '}
                     {new Date(s.endDate).toLocaleDateString('es-PE', { timeZone: 'UTC' })} · {s.days} día(s)
@@ -282,7 +273,11 @@ export default function Vacaciones() {
               </div>
             </div>
           ))}
-          {todas.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>No hay solicitudes aquí.</div>}
+          {todas.length === 0 && (
+            <div className="card" style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+              📋 No hay solicitudes aquí.
+            </div>
+          )}
         </div>
       )}
 
