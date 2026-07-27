@@ -6,6 +6,7 @@ import ChangePasswordModal from './ChangePasswordModal.jsx';
 import ChatDock from './ChatDock.jsx';
 import Reloj from './Reloj.jsx';
 import PerfilDrawer from './PerfilDrawer.jsx';
+import GlobalSearch from './GlobalSearch.jsx';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
 
@@ -24,6 +25,7 @@ export default function Shell() {
       <div className="main-area">
         <div className="topbar">
           <Reloj />
+          <GlobalSearch />
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
             <NotificationBell />
             <button
