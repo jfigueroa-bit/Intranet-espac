@@ -7,7 +7,6 @@ const { idsDeVacacionesHoy } = require('../utils/vacationStatus');
 
 const router = express.Router();
 
-// POST /api/auth/login
 router.post('/login', async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) {
@@ -44,7 +43,6 @@ router.post('/login', async (req, res) => {
   });
 });
 
-// POST /api/auth/change-password  (el propio usuario cambia su contraseña)
 router.post('/change-password', requireAuth, async (req, res) => {
   const { currentPassword, newPassword } = req.body;
   if (!newPassword || newPassword.length < 6) {
@@ -53,8 +51,6 @@ router.post('/change-password', requireAuth, async (req, res) => {
 
   const user = await prisma.user.findUnique({ where: { id: req.user.id } });
 
-  // Si ya cambió su contraseña antes, le pedimos la actual para confirmar.
-  // Si es su primer cambio obligatorio (mustChangePassword), no la pedimos.
   if (!user.mustChangePassword) {
     if (!currentPassword) {
       return res.status(400).json({ error: 'Debes indicar tu contraseña actual' });
@@ -74,14 +70,13 @@ router.post('/change-password', requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
-// GET /api/auth/me
 router.get('/me', requireAuth, async (req, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.user.id },
     select: {
       id: true, username: true, firstName: true, lastName: true, email: true,
       role: true, cargo: true, schedule: true, scheduleNote: true, signatureData: true,
-      profilePhoto: true,
+      profilePhoto: true, canViewPayments: true,
       workStatus: true, mustChangePassword: true, vacationDaysTotal: true,
       vacationDaysUsed: true,
       areas: { include: { area: true } },
@@ -91,8 +86,6 @@ router.get('/me', requireAuth, async (req, res) => {
   res.json(enVacaciones.has(user.id) ? { ...user, workStatus: 'VACACIONES' } : user);
 });
 
-// PATCH /api/auth/firma -> cada quien sube/actualiza SU PROPIA firma digital
-// (una vez guardada, queda lista para usarse al generar documentos)
 router.patch('/firma', requireAuth, async (req, res) => {
   const { signatureData } = req.body;
   if (!signatureData) return res.status(400).json({ error: 'Falta la imagen de la firma' });
@@ -100,7 +93,6 @@ router.patch('/firma', requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
-// PATCH /api/auth/foto -> cada quien sube/actualiza SU PROPIA foto de perfil
 router.patch('/foto', requireAuth, async (req, res) => {
   const { profilePhoto } = req.body;
   if (!profilePhoto) return res.status(400).json({ error: 'Falta la imagen' });
