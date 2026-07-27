@@ -14,13 +14,10 @@ const USER_LISTADO = {
   id: true, username: true, firstName: true, lastName: true, email: true,
   role: true, cargo: true, workStatus: true, isActive: true,
   hierarchyOrder: true, managerId: true, vacationDaysTotal: true,
-  vacationDaysUsed: true, schedule: true, scheduleNote: true,
+  vacationDaysUsed: true, schedule: true, scheduleNote: true, canViewPayments: true,
   areas: { include: { area: true } },
 };
 
-// Si alguien tiene una solicitud de vacaciones APROBADA que cubre el día de hoy,
-// se le muestra como "VACACIONES" aunque en la base de datos tenga guardado otro
-// estado — así aparece y desaparece solo, sin que nadie tenga que cambiarlo a mano.
 async function conEstadoDeVacaciones(users) {
   const enVacaciones = await idsDeVacacionesHoy();
   const lista = Array.isArray(users) ? users : [users];
@@ -28,7 +25,6 @@ async function conEstadoDeVacaciones(users) {
   return Array.isArray(users) ? resultado : resultado[0];
 }
 
-// GET /api/users  -> directorio de la compañía (cualquier usuario logueado puede ver)
 router.get('/', requireAuth, async (req, res) => {
   const users = await prisma.user.findMany({
     where: { isActive: true },
@@ -38,9 +34,6 @@ router.get('/', requireAuth, async (req, res) => {
   res.json(await conEstadoDeVacaciones(users));
 });
 
-// GET /api/users/:id/firma -> trae la firma digital guardada de alguien, para incrustarla
-// al generar un documento. Solo quien puede crear documentos (Admin, RRHH, o un jefe de
-// área) puede pedir la firma de otra persona; cualquiera puede pedir la suya propia.
 router.get('/:id/firma', requireAuth, async (req, res) => {
   const id = Number(req.params.id);
 
@@ -59,7 +52,6 @@ router.get('/:id/firma', requireAuth, async (req, res) => {
   res.json({ signatureData: persona?.signatureData || null });
 });
 
-// POST /api/users  -> Admin crea un usuario nuevo (username y contraseña se generan solos)
 router.post('/', requireAuth, requireRole('ADMIN'), async (req, res) => {
   const { firstName, lastName, email, role, cargo, areaIds = [], managerId } = req.body;
   if (!firstName || !lastName || !email) {
@@ -68,8 +60,6 @@ router.post('/', requireAuth, requireRole('ADMIN'), async (req, res) => {
 
   const existente = await prisma.user.findUnique({ where: { email } });
 
-  // Si el correo pertenece a alguien que fue "eliminado" (desactivado) antes,
-  // reactivamos esa misma cuenta en vez de fallar por correo duplicado.
   if (existente && !existente.isActive) {
     const passwordTemporal = generarPasswordTemporal();
     const passwordHash = await bcrypt.hash(passwordTemporal, 10);
@@ -126,17 +116,14 @@ router.post('/', requireAuth, requireRole('ADMIN'), async (req, res) => {
     select: USER_LISTADO,
   });
 
-  // Devolvemos la contraseña temporal UNA sola vez, para que el admin se la comparta al usuario
   res.status(201).json({ user: nuevo, passwordTemporal });
 });
 
-// PATCH /api/users/:id  -> Admin edita cualquier dato del usuario (nombre, correo, cargo,
-// rol, áreas/tags -uno o varios-, jefe directo, orden jerárquico, estado activo)
 router.patch('/:id', requireAuth, requireRole('ADMIN'), async (req, res) => {
   const id = Number(req.params.id);
   const {
     firstName, lastName, email, role, cargo, workStatus,
-    managerId, hierarchyOrder, areaIds, isActive,
+    managerId, hierarchyOrder, areaIds, isActive, canViewPayments,
   } = req.body;
 
   const data = {};
@@ -149,6 +136,7 @@ router.patch('/:id', requireAuth, requireRole('ADMIN'), async (req, res) => {
   if (managerId !== undefined) data.managerId = managerId;
   if (hierarchyOrder !== undefined) data.hierarchyOrder = hierarchyOrder;
   if (isActive !== undefined) data.isActive = isActive;
+  if (canViewPayments !== undefined) data.canViewPayments = canViewPayments;
 
   if (Array.isArray(areaIds)) {
     await prisma.userArea.deleteMany({ where: { userId: id } });
@@ -159,9 +147,6 @@ router.patch('/:id', requireAuth, requireRole('ADMIN'), async (req, res) => {
   res.json(actualizado);
 });
 
-// DELETE /api/users/:id -> Admin "elimina" un usuario. No se borra de la base de datos
-// (para no perder su historial de vacaciones, solicitudes, etc.), simplemente se
-// desactiva: deja de aparecer en la Compañía y ya no puede iniciar sesión.
 router.delete('/:id', requireAuth, requireRole('ADMIN'), async (req, res) => {
   const id = Number(req.params.id);
   if (id === req.user.id) {
@@ -171,8 +156,6 @@ router.delete('/:id', requireAuth, requireRole('ADMIN'), async (req, res) => {
   res.json({ ok: true });
 });
 
-// PATCH /api/users/:id/estado -> cualquier usuario cambia SU PROPIO estado (presencial/home office)
-// (vacaciones lo pone el sistema automáticamente en la Fase de Vacaciones, no a mano)
 router.patch('/:id/estado', requireAuth, async (req, res) => {
   const id = Number(req.params.id);
   if (id !== req.user.id) {
@@ -188,7 +171,6 @@ router.patch('/:id/estado', requireAuth, async (req, res) => {
   res.json(actualizado);
 });
 
-// PATCH /api/users/:id/horario -> SOLO Admin o RRHH pueden subir el horario de alguien
 router.patch(
   '/:id/horario',
   requireAuth,
@@ -214,7 +196,6 @@ router.patch(
   }
 );
 
-// PATCH /api/users/:id/vacaciones -> SOLO Admin o RRHH configuran cuántos días de vacaciones tiene alguien
 router.patch('/:id/vacaciones', requireAuth, requireRole('ADMIN', 'RRHH'), async (req, res) => {
   const id = Number(req.params.id);
   const { vacationDaysTotal } = req.body;
@@ -229,7 +210,6 @@ router.patch('/:id/vacaciones', requireAuth, requireRole('ADMIN', 'RRHH'), async
   res.json(actualizado);
 });
 
-// POST /api/users/:id/reset-password -> Admin restablece la contraseña de alguien
 router.post('/:id/reset-password', requireAuth, requireRole('ADMIN'), async (req, res) => {
   const id = Number(req.params.id);
   const passwordTemporal = generarPasswordTemporal();
