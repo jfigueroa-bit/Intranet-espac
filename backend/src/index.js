@@ -25,6 +25,10 @@ const schedulesRoutes = require('./routes/schedules');
 const requestsRoutes = require('./routes/requests');
 const pushRoutes = require('./routes/push');
 const paymentsRoutes = require('./routes/payments');
+const aircraftTypesRoutes = require('./routes/aircraftTypes');
+const simulatorTypesRoutes = require('./routes/simulatorTypes');
+const flightLogsRoutes = require('./routes/flightLogs');
+const simulatorLogsRoutes = require('./routes/simulatorLogs');
 const { setIO, salaDeUsuario } = require('./utils/socket');
 
 const app = express();
@@ -56,6 +60,10 @@ app.use('/api/schedules', schedulesRoutes);
 app.use('/api/requests', requestsRoutes);
 app.use('/api/push', pushRoutes);
 app.use('/api/payments', paymentsRoutes);
+app.use('/api/aircraft-types', aircraftTypesRoutes);
+app.use('/api/simulator-types', simulatorTypesRoutes);
+app.use('/api/flight-logs', flightLogsRoutes);
+app.use('/api/simulator-logs', simulatorLogsRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);
