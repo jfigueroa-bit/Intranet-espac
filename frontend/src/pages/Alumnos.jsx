@@ -4,6 +4,7 @@ import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { COLOR_TIPO_SESION, LABEL_TIPO_SESION } from '../utils/programaciones';
 import { construirEstadoCuentaHTML } from '../utils/estadoCuenta';
+import { construirReporteHorasHTML } from '../utils/reporteHoras';
 
 function normalizar(texto) {
   return (texto || '')
@@ -161,6 +162,13 @@ export default function Alumnos() {
 
   function verEstadoDeCuenta() {
     const html = construirEstadoCuentaHTML({ alumno: seleccionado, cuotas });
+    const ventana = window.open('', '_blank');
+    ventana.document.write(html);
+    ventana.document.close();
+  }
+
+  function verReporteHoras() {
+    const html = construirReporteHorasHTML({ alumno: seleccionado, sesiones: sesionesAlumno });
     const ventana = window.open('', '_blank');
     ventana.document.write(html);
     ventana.document.close();
@@ -401,7 +409,12 @@ export default function Alumnos() {
               </div>
 
               <div style={{ borderTop: '1px solid var(--border)', marginTop: 14, paddingTop: 12 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Programaciones</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>Programaciones</div>
+                  <button className="btn secondary" style={{ padding: '3px 8px', fontSize: 11 }} onClick={verReporteHoras}>
+                    Reporte de horas (PDF)
+                  </button>
+                </div>
                 {cargandoSesiones && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Cargando...</div>}
                 {!cargandoSesiones && sesionesAlumno.length === 0 && (
                   <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Este alumno no tiene sesiones programadas.</div>
