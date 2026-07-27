@@ -50,6 +50,8 @@ const TABS = [
   { value: 'pagos', label: 'Pagos' },
 ];
 
+const SIMBOLO_MONEDA = { PEN: 'S/', USD: '$' };
+
 export default function Alumnos() {
   const { user } = useAuth();
   const esAdmin = user?.role === 'ADMIN';
@@ -87,7 +89,7 @@ export default function Alumnos() {
   const [puedeVerPagos, setPuedeVerPagos] = useState(false);
   const [cuotas, setCuotas] = useState([]);
   const [cargandoCuotas, setCargandoCuotas] = useState(false);
-  const [nuevaCuota, setNuevaCuota] = useState({ concept: '', amount: '', dueDate: '' });
+  const [nuevaCuota, setNuevaCuota] = useState({ concept: '', amount: '', currency: 'PEN', dueDate: '' });
   const [mostrarNuevaCuota, setMostrarNuevaCuota] = useState(false);
 
   const [nuevaSesion, setNuevaSesion] = useState({ type: 'TEORIA', instructorId: '', fecha: new Date().toISOString().slice(0, 10), startTime: '09:00', endTime: '10:00', notes: '' });
@@ -219,7 +221,7 @@ export default function Alumnos() {
     setError('');
     try {
       await api.post('/payments', { ...nuevaCuota, studentId: seleccionado.id });
-      setNuevaCuota({ concept: '', amount: '', dueDate: '' });
+      setNuevaCuota({ concept: '', amount: '', currency: 'PEN', dueDate: '' });
       setMostrarNuevaCuota(false);
       cargarCuotasAlumno(seleccionado.id);
     } catch (err) {
@@ -688,7 +690,7 @@ export default function Alumnos() {
                         <div key={c.id} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid var(--border)' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
                             <strong>{c.concept}</strong>
-                            <span>S/ {Number(c.amount).toFixed(2)}</span>
+                            <span>{SIMBOLO_MONEDA[c.currency] || 'S/'} {Number(c.amount).toFixed(2)}</span>
                           </div>
                           <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                             Vence: {new Date(c.dueDate).toLocaleDateString('es-PE', { timeZone: 'UTC' })}
@@ -708,7 +710,28 @@ export default function Alumnos() {
                     {mostrarNuevaCuota ? (
                       <form onSubmit={crearCuota} style={{ marginTop: 8 }}>
                         <div className="field"><label>Concepto</label><input value={nuevaCuota.concept} onChange={(e) => setNuevaCuota({ ...nuevaCuota, concept: e.target.value })} placeholder="Ej: Cuota 1" required /></div>
-                        <div className="field"><label>Monto (S/)</label><input type="number" step="0.01" value={nuevaCuota.amount} onChange={(e) => setNuevaCuota({ ...nuevaCuota, amount: e.target.value })} required /></div>
+                        <div className="field">
+                          <label>Moneda</label>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button
+                              type="button"
+                              className={`btn ${nuevaCuota.currency === 'PEN' ? '' : 'secondary'}`}
+                              style={{ padding: '5px 14px', fontSize: 12 }}
+                              onClick={() => setNuevaCuota({ ...nuevaCuota, currency: 'PEN' })}
+                            >
+                              Soles (S/)
+                            </button>
+                            <button
+                              type="button"
+                              className={`btn ${nuevaCuota.currency === 'USD' ? '' : 'secondary'}`}
+                              style={{ padding: '5px 14px', fontSize: 12 }}
+                              onClick={() => setNuevaCuota({ ...nuevaCuota, currency: 'USD' })}
+                            >
+                              Dólares ($)
+                            </button>
+                          </div>
+                        </div>
+                        <div className="field"><label>Monto ({SIMBOLO_MONEDA[nuevaCuota.currency]})</label><input type="number" step="0.01" value={nuevaCuota.amount} onChange={(e) => setNuevaCuota({ ...nuevaCuota, amount: e.target.value })} required /></div>
                         <div className="field"><label>Fecha de vencimiento</label><input type="date" value={nuevaCuota.dueDate} onChange={(e) => setNuevaCuota({ ...nuevaCuota, dueDate: e.target.value })} required /></div>
                         <div style={{ display: 'flex', gap: 6 }}>
                           <button className="btn" style={{ padding: '5px 12px', fontSize: 12 }}>Guardar cuota</button>
