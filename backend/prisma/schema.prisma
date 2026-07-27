@@ -389,6 +389,7 @@ model Payment {
   student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
   concept     String    // ej: "Cuota 1 - Piloto Privado"
   amount      Float
+  currency    String    @default("PEN") // PEN (soles) | USD (dólares)
   dueDate     DateTime  // fecha de vencimiento
   paidDate    DateTime? // null = todavía no se ha pagado
   notes       String?
