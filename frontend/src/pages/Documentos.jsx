@@ -7,6 +7,37 @@ import FirmaCanvas from '../components/FirmaCanvas.jsx';
 const MAX_DOC_MB = 10;
 const MAX_IMG_MB = 10;
 
+const TABS = [
+  { value: 'general', label: 'Documentos generales', icono: '📁' },
+  { value: 'personal', label: 'Mis documentos', icono: '📂' },
+  { value: 'firmas', label: 'Firmas pendientes', icono: '✍️' },
+  { value: 'crear', label: 'Crear documento', icono: '➕', requiereGestion: true },
+  { value: 'tipos', label: 'Tipos y permisos', icono: '⚙️', soloAdmin: true },
+];
+
+function FilaDocumento({ d, onVer, onEliminar, puedeEliminar }) {
+  return (
+    <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderLeft: '4px solid var(--primary)', marginBottom: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontSize: 20 }}>📄</span>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 14 }}>{d.title}</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+            {d.documentType?.name || 'Sin tipo'} · Subido por {d.uploadedBy.firstName} {d.uploadedBy.lastName} ·{' '}
+            {new Date(d.createdAt).toLocaleDateString('es-PE')}
+          </div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+        <button className="btn secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => onVer(d)}>Ver / Descargar</button>
+        {puedeEliminar && (
+          <button className="btn danger" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => onEliminar(d)}>Eliminar</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function Documentos() {
   const { user } = useAuth();
   const esAdmin = user?.role === 'ADMIN';
@@ -49,8 +80,6 @@ export default function Documentos() {
   const esJefe = usuarios.some((u) => u.managerId === user?.id);
   const puedeGestionar = esAdmin || esRRHH || esJefe;
 
-  // A quién puede ver/subir documentos personales (persona principal del documento):
-  // Admin y RRHH a cualquiera, un jefe de área solo a su propia gente.
   const personasDisponibles = esAdmin || esRRHH ? usuarios : usuarios.filter((u) => u.managerId === user?.id);
 
   useEffect(() => {
@@ -196,7 +225,6 @@ export default function Documentos() {
     cargarBase();
   }
 
-  // --- Nueva plantilla / editar plantilla ---
   function agregarCampo() {
     if (!nuevoCampoLabel.trim()) return;
     const key = slugify(nuevoCampoLabel) || `campo_${nuevaPlantilla.campos.length + 1}`;
@@ -257,7 +285,6 @@ export default function Documentos() {
     if (Number(plantillaId) === id) setPlantillaId('');
   }
 
-  // --- Generar (enviar a firmar) un documento a partir de una plantilla ---
   const plantilla = plantillas.find((p) => p.id === Number(plantillaId));
 
   function actualizarValorCampo(key, value) {
@@ -318,7 +345,6 @@ export default function Documentos() {
     }
   }
 
-  // --- Firmar un documento pendiente ---
   function verDocumentoPendiente(draft) {
     const fechaTexto = new Date(draft.fecha).toLocaleDateString('es-PE', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
     const principal = draft.signers.find((s) => s.order === 1);
@@ -379,28 +405,19 @@ export default function Documentos() {
 
   return (
     <div style={{ maxWidth: 780 }}>
-      <h2 style={{ marginTop: 0 }}>Documentos</h2>
+      <h2 style={{ marginTop: 0 }}>📑 Documentos</h2>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        <button className={`btn ${tab === 'general' ? '' : 'secondary'}`} style={{ padding: '6px 16px', fontSize: 13 }} onClick={() => setTab('general')}>
-          Documentos generales
-        </button>
-        <button className={`btn ${tab === 'personal' ? '' : 'secondary'}`} style={{ padding: '6px 16px', fontSize: 13 }} onClick={() => setTab('personal')}>
-          Mis documentos
-        </button>
-        <button className={`btn ${tab === 'firmas' ? '' : 'secondary'}`} style={{ padding: '6px 16px', fontSize: 13 }} onClick={() => setTab('firmas')}>
-          Firmas pendientes{pendientesFirma.length > 0 ? ` (${pendientesFirma.length})` : ''}
-        </button>
-        {puedeGestionar && (
-          <button className={`btn ${tab === 'crear' ? '' : 'secondary'}`} style={{ padding: '6px 16px', fontSize: 13 }} onClick={() => setTab('crear')}>
-            Crear documento
+        {TABS.filter((t) => (!t.requiereGestion || puedeGestionar) && (!t.soloAdmin || esAdmin)).map((t) => (
+          <button
+            key={t.value}
+            className={`btn ${tab === t.value ? '' : 'secondary'}`}
+            style={{ padding: '6px 16px', fontSize: 13 }}
+            onClick={() => setTab(t.value)}
+          >
+            {t.icono} {t.label}{t.value === 'firmas' && pendientesFirma.length > 0 ? ` (${pendientesFirma.length})` : ''}
           </button>
-        )}
-        {esAdmin && (
-          <button className={`btn ${tab === 'tipos' ? '' : 'secondary'}`} style={{ padding: '6px 16px', fontSize: 13 }} onClick={() => setTab('tipos')}>
-            Tipos y permisos
-          </button>
-        )}
+        ))}
       </div>
 
       {error && <div className="error-text" style={{ marginBottom: 12 }}>{error}</div>}
@@ -409,7 +426,7 @@ export default function Documentos() {
         <div>
           {puedeGestionar && (
             <form onSubmit={subirGeneral} className="card" style={{ marginBottom: 16 }}>
-              <h3 style={{ marginTop: 0, fontSize: 15 }}>Subir documento general</h3>
+              <h3 style={{ marginTop: 0, fontSize: 15 }}>📤 Subir documento general</h3>
               <div className="field">
                 <label>Título</label>
                 <input value={formGeneral.title} onChange={(e) => setFormGeneral({ ...formGeneral, title: e.target.value })} required />
@@ -429,26 +446,20 @@ export default function Documentos() {
             </form>
           )}
 
-          <div className="card">
-            {generales.map((d) => (
-              <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>{d.title}</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                    {d.documentType?.name || 'Sin tipo'} · Subido por {d.uploadedBy.firstName} {d.uploadedBy.lastName} ·{' '}
-                    {new Date(d.createdAt).toLocaleDateString('es-PE')}
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button className="btn secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => abrirDocumento(d)}>Ver / Descargar</button>
-                  {(esAdmin || d.uploadedBy.id === user?.id) && (
-                    <button className="btn danger" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => eliminarDoc(d.id, false)}>Eliminar</button>
-                  )}
-                </div>
-              </div>
-            ))}
-            {generales.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No hay documentos generales todavía.</div>}
-          </div>
+          {generales.map((d) => (
+            <FilaDocumento
+              key={d.id}
+              d={d}
+              onVer={abrirDocumento}
+              onEliminar={(doc) => eliminarDoc(doc.id, false)}
+              puedeEliminar={esAdmin || d.uploadedBy.id === user?.id}
+            />
+          ))}
+          {generales.length === 0 && (
+            <div className="card" style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+              📁 No hay documentos generales todavía.
+            </div>
+          )}
         </div>
       )}
 
@@ -456,7 +467,7 @@ export default function Documentos() {
         <div>
           {puedeGestionar && (
             <div className="card" style={{ marginBottom: 16 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>Viendo la carpeta de:</label>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>👤 Viendo la carpeta de:</label>
               <select value={usuarioPersonalId} onChange={(e) => setUsuarioPersonalId(Number(e.target.value))} style={{ marginTop: 6 }}>
                 <option value={user.id}>Yo ({user.firstName} {user.lastName})</option>
                 {personasDisponibles.filter((u) => u.id !== user.id).map((u) => (
@@ -468,7 +479,7 @@ export default function Documentos() {
 
           {puedeGestionar && (
             <form onSubmit={subirPersonal} className="card" style={{ marginBottom: 16 }}>
-              <h3 style={{ marginTop: 0, fontSize: 15 }}>Subir documento personal</h3>
+              <h3 style={{ marginTop: 0, fontSize: 15 }}>📤 Subir documento personal</h3>
               <div className="field">
                 <label>¿Para quién es?</label>
                 <select value={formPersonal.ownerId} onChange={(e) => setFormPersonal({ ...formPersonal, ownerId: e.target.value })} required>
@@ -495,26 +506,20 @@ export default function Documentos() {
             </form>
           )}
 
-          <div className="card">
-            {personales.map((d) => (
-              <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>{d.title}</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                    {d.documentType?.name || 'Sin tipo'} · Subido por {d.uploadedBy.firstName} {d.uploadedBy.lastName} ·{' '}
-                    {new Date(d.createdAt).toLocaleDateString('es-PE')}
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button className="btn secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => abrirDocumento(d)}>Ver / Descargar</button>
-                  {(esAdmin || d.uploadedBy.id === user?.id) && (
-                    <button className="btn danger" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => eliminarDoc(d.id, true)}>Eliminar</button>
-                  )}
-                </div>
-              </div>
-            ))}
-            {personales.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No hay documentos personales aquí todavía.</div>}
-          </div>
+          {personales.map((d) => (
+            <FilaDocumento
+              key={d.id}
+              d={d}
+              onVer={abrirDocumento}
+              onEliminar={(doc) => eliminarDoc(doc.id, true)}
+              puedeEliminar={esAdmin || d.uploadedBy.id === user?.id}
+            />
+          ))}
+          {personales.length === 0 && (
+            <div className="card" style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+              📂 No hay documentos personales aquí todavía.
+            </div>
+          )}
         </div>
       )}
 
@@ -524,12 +529,14 @@ export default function Documentos() {
             Documentos que alguien te mandó y necesitan tu firma para quedar completos.
           </p>
           {pendientesFirma.map((d) => {
-            const yo = d.signers.find((s) => s.userId === user?.id);
             const otros = d.signers.filter((s) => s.userId !== user?.id);
             return (
-              <div key={d.id} className="card" style={{ marginBottom: 12 }}>
-                <div style={{ fontWeight: 600 }}>{d.title}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+              <div key={d.id} className="card" style={{ marginBottom: 12, borderLeft: '4px solid #e0a013' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 18 }}>✍️</span>
+                  <div style={{ fontWeight: 700 }}>{d.title}</div>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, marginTop: 4 }}>
                   Enviado por {d.createdBy.firstName} {d.createdBy.lastName} · Para {d.owner.firstName} {d.owner.lastName} ·{' '}
                   {new Date(d.fecha).toLocaleDateString('es-PE', { timeZone: 'UTC' })}
                 </div>
@@ -598,7 +605,11 @@ export default function Documentos() {
               </div>
             );
           })}
-          {pendientesFirma.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>No tienes documentos pendientes de firmar.</div>}
+          {pendientesFirma.length === 0 && (
+            <div className="card" style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+              ✅ No tienes documentos pendientes de firmar.
+            </div>
+          )}
         </div>
       )}
 
@@ -606,7 +617,7 @@ export default function Documentos() {
         <div>
           <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
             <button className={`btn ${subVistaCrear === 'generar' ? '' : 'secondary'}`} style={{ padding: '5px 14px', fontSize: 12 }} onClick={() => setSubVistaCrear('generar')}>
-              Generar documento
+              📝 Generar documento
             </button>
             <button className={`btn ${subVistaCrear === 'nueva' ? '' : 'secondary'}`} style={{ padding: '5px 14px', fontSize: 12 }} onClick={empezarPlantillaNueva}>
               + Nueva plantilla
@@ -673,8 +684,8 @@ export default function Documentos() {
           {subVistaCrear === 'generar' && (
             <>
               {plantillas.length === 0 ? (
-                <div className="card" style={{ color: 'var(--text-muted)', fontSize: 14 }}>
-                  Todavía no hay ninguna plantilla creada. Ve a "+ Nueva plantilla" para crear la primera
+                <div className="card" style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>
+                  📄 Todavía no hay ninguna plantilla creada. Ve a "+ Nueva plantilla" para crear la primera
                   (por ejemplo, un acta de préstamo de equipo).
                 </div>
               ) : (
@@ -750,7 +761,7 @@ export default function Documentos() {
                         </select>
                       </div>
 
-                      {enviado && <div style={{ color: 'var(--success)', fontSize: 13, marginBottom: 10 }}>Documento enviado a firmar ✓</div>}
+                      {enviado && <div style={{ color: 'var(--success)', fontSize: 13, marginBottom: 10 }}>✓ Documento enviado a firmar</div>}
 
                       <div style={{ display: 'flex', gap: 8 }}>
                         <button type="button" className="btn secondary" onClick={verVistaPrevia} disabled={!formGenerar.ownerId}>
@@ -774,36 +785,39 @@ export default function Documentos() {
             <button className="btn">Crear tipo</button>
           </form>
 
-          <div className="card">
-            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 0 }}>
-              Marca qué áreas pueden ver los documentos <strong>generales</strong> de cada tipo. Si no marcas
-              ninguna área, ese tipo queda visible para toda la empresa. (Esto no afecta a los documentos
-              personales, esos siempre son privados de cada quien).
-            </p>
-            {tipos.map((t) => (
-              <div key={t.id} style={{ padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <strong style={{ fontSize: 14 }}>{t.name}</strong>
-                  <button className="btn danger" style={{ padding: '3px 10px', fontSize: 11 }} onClick={() => eliminarTipo(t.id)}>Eliminar tipo</button>
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-                  {areas.map((a) => (
-                    <label key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, width: 'auto' }}>
-                      <input
-                        type="checkbox"
-                        style={{ width: 'auto' }}
-                        checked={t.permissions.some((p) => p.areaId === a.id)}
-                        onChange={() => cambiarPermiso(t, a.id)}
-                      />
-                      {a.name}
-                    </label>
-                  ))}
-                  {areas.length === 0 && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>No hay áreas creadas todavía.</span>}
-                </div>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+            Marca qué áreas pueden ver los documentos <strong>generales</strong> de cada tipo. Si no marcas
+            ninguna área, ese tipo queda visible para toda la empresa. (Esto no afecta a los documentos
+            personales, esos siempre son privados de cada quien).
+          </p>
+
+          {tipos.map((t) => (
+            <div key={t.id} className="card" style={{ marginBottom: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <strong style={{ fontSize: 14 }}>🏷️ {t.name}</strong>
+                <button className="btn danger" style={{ padding: '3px 10px', fontSize: 11 }} onClick={() => eliminarTipo(t.id)}>Eliminar tipo</button>
               </div>
-            ))}
-            {tipos.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Todavía no has creado ningún tipo.</div>}
-          </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                {areas.map((a) => (
+                  <label key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, width: 'auto' }}>
+                    <input
+                      type="checkbox"
+                      style={{ width: 'auto' }}
+                      checked={t.permissions.some((p) => p.areaId === a.id)}
+                      onChange={() => cambiarPermiso(t, a.id)}
+                    />
+                    {a.name}
+                  </label>
+                ))}
+                {areas.length === 0 && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>No hay áreas creadas todavía.</span>}
+              </div>
+            </div>
+          ))}
+          {tipos.length === 0 && (
+            <div className="card" style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+              ⚙️ Todavía no has creado ningún tipo.
+            </div>
+          )}
         </div>
       )}
     </div>
