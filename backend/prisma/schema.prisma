@@ -97,6 +97,8 @@ model User {
   pagosCreados           Payment[]
   pagosAutorizados       Payment[] @relation("PagosAutorizados")
   suscripcionesPush      PushSubscription[]
+  vuelosRegistrados      FlightLogEntry[] @relation("VuelosRegistrados")
+  simuladoresRegistrados SimulatorLogEntry[] @relation("SimuladoresRegistrados")
 }
 
 model Announcement {
@@ -341,6 +343,8 @@ model Student {
   sessions ScheduleSession[]
   payments Payment[]
   courseEnrollments StudentCourse[]
+  flightLogEntries FlightLogEntry[]
+  simulatorLogEntries SimulatorLogEntry[]
 }
 
 // Una sesión programada: clase de teoría, simulador, o vuelo. La agenda el
@@ -425,4 +429,53 @@ model StudentCourse {
   status      String    @default("EN_CURSO") // EN_CURSO | COMPLETADO
   enrolledAt  DateTime  @default(now())
   completedAt DateTime?
+}
+
+// Tipos de avión (ej: "Cessna 172", "Piper Seneca"). Solo Admin los crea, para
+// que se puedan ir agregando según la flota real de la escuela.
+model AircraftType {
+  id        Int              @id @default(autoincrement())
+  name      String           @unique
+  createdAt DateTime         @default(now())
+  entries   FlightLogEntry[]
+}
+
+// Tipos de simulador (ej: "Simulador Redbird FMX"). Solo Admin los crea.
+model SimulatorType {
+  id        Int                 @id @default(autoincrement())
+  name      String              @unique
+  createdAt DateTime            @default(now())
+  entries   SimulatorLogEntry[]
+}
+
+// Cada vuelo registrado de un alumno: qué avión voló, cuántas horas, y cuándo.
+// Al crearse, esas horas se suman automáticamente al total del alumno.
+model FlightLogEntry {
+  id             Int          @id @default(autoincrement())
+  studentId      Int
+  student        Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  aircraftTypeId Int
+  aircraftType   AircraftType @relation(fields: [aircraftTypeId], references: [id])
+  hours          Float
+  date           DateTime
+  notes          String?
+  createdById    Int
+  createdBy      User         @relation("VuelosRegistrados", fields: [createdById], references: [id])
+  createdAt      DateTime     @default(now())
+}
+
+// Cada sesión de simulador registrada de un alumno: qué simulador usó, cuántas
+// horas, y cuándo. Al crearse, esas horas se suman automáticamente al total.
+model SimulatorLogEntry {
+  id              Int           @id @default(autoincrement())
+  studentId       Int
+  student         Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  simulatorTypeId Int
+  simulatorType   SimulatorType @relation(fields: [simulatorTypeId], references: [id])
+  hours           Float
+  date            DateTime
+  notes           String?
+  createdById     Int
+  createdBy       User          @relation("SimuladoresRegistrados", fields: [createdById], references: [id])
+  createdAt       DateTime      @default(now())
 }
