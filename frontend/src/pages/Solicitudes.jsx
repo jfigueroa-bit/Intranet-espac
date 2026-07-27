@@ -3,13 +3,13 @@ import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
 
 const MAX_ARCHIVO_MB = 10;
-const ESTADO_LABEL = { PENDIENTE: 'Pendiente', EN_PROCESO: 'En proceso', COMPLETADA: 'Completada', RECHAZADA: 'Rechazada' };
+const ESTADO_LABEL = { PENDIENTE: '⏳ Pendiente', EN_PROCESO: '🔄 En proceso', COMPLETADA: '✓ Completada', RECHAZADA: '✕ Rechazada' };
 const ESTADO_COLOR = { PENDIENTE: '#c9a227', EN_PROCESO: '#2952cc', COMPLETADA: '#2e7d32', RECHAZADA: '#b3261e' };
 
 function Badge({ status }) {
   return (
     <span style={{
-      display: 'inline-block', padding: '2px 10px', borderRadius: 999, fontSize: 12, fontWeight: 600,
+      display: 'inline-block', padding: '3px 12px', borderRadius: 999, fontSize: 12, fontWeight: 600,
       background: ESTADO_COLOR[status] + '22', color: ESTADO_COLOR[status],
     }}>
       {ESTADO_LABEL[status]}
@@ -112,14 +112,14 @@ export default function Solicitudes() {
 
   return (
     <div style={{ maxWidth: 780 }}>
-      <h2 style={{ marginTop: 0 }}>Solicitudes</h2>
+      <h2 style={{ marginTop: 0 }}>📋 Solicitudes</h2>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
         <button className={`btn ${tab === 'meSolicitan' ? '' : 'secondary'}`} style={{ padding: '6px 16px', fontSize: 13 }} onClick={() => setTab('meSolicitan')}>
-          Me solicitan
+          📥 Me solicitan
         </button>
         <button className={`btn ${tab === 'mias' ? '' : 'secondary'}`} style={{ padding: '6px 16px', fontSize: 13 }} onClick={() => setTab('mias')}>
-          Mis solicitudes
+          📤 Mis solicitudes
         </button>
         <button className="btn secondary" style={{ padding: '6px 16px', fontSize: 13, marginLeft: 'auto' }} onClick={() => setMostrarNueva((v) => !v)}>
           + Nueva solicitud
@@ -128,7 +128,7 @@ export default function Solicitudes() {
 
       {mostrarNueva && (
         <form onSubmit={crearSolicitud} className="card" style={{ marginBottom: 16 }}>
-          <h3 style={{ marginTop: 0, fontSize: 15 }}>Nueva solicitud</h3>
+          <h3 style={{ marginTop: 0, fontSize: 15 }}>📝 Nueva solicitud</h3>
           <div className="field">
             <label>¿A quién va dirigida?</label>
             <select value={nueva.assigneeId} onChange={(e) => setNueva({ ...nueva, assigneeId: e.target.value })} required>
@@ -159,10 +159,10 @@ export default function Solicitudes() {
       {!mostrarNueva && error && <div className="error-text" style={{ marginBottom: 12 }}>{error}</div>}
 
       {solicitudes.map((s) => (
-        <div key={s.id} className="card" style={{ marginBottom: 12 }}>
+        <div key={s.id} className="card" style={{ marginBottom: 12, borderLeft: `4px solid ${ESTADO_COLOR[s.status]}` }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
-              <div style={{ fontWeight: 600 }}>{s.title}</div>
+              <div style={{ fontWeight: 700 }}>📨 {s.title}</div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                 {tab === 'meSolicitan'
                   ? <>De {s.requester.firstName} {s.requester.lastName}</>
@@ -216,8 +216,8 @@ export default function Solicitudes() {
         </div>
       ))}
       {solicitudes.length === 0 && (
-        <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>
-          {tab === 'meSolicitan' ? 'Nadie te ha pedido nada por aquí.' : 'Todavía no has hecho ninguna solicitud.'}
+        <div className="card" style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+          {tab === 'meSolicitan' ? '📭 Nadie te ha pedido nada por aquí.' : '📋 Todavía no has hecho ninguna solicitud.'}
         </div>
       )}
     </div>
