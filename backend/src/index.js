@@ -1,4 +1,3 @@
-// prueba 1
 require('dotenv').config();
 require('express-async-errors');
 const express = require('express');
@@ -32,6 +31,8 @@ const flightLogsRoutes = require('./routes/flightLogs');
 const simulatorLogsRoutes = require('./routes/simulatorLogs');
 const searchRoutes = require('./routes/search');
 const reportsRoutes = require('./routes/reports');
+const theoryTopicsRoutes = require('./routes/theoryTopics');
+const theoryLogsRoutes = require('./routes/theoryLogs');
 const { setIO, salaDeUsuario } = require('./utils/socket');
 
 const app = express();
@@ -69,6 +70,8 @@ app.use('/api/flight-logs', flightLogsRoutes);
 app.use('/api/simulator-logs', simulatorLogsRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/reports', reportsRoutes);
+app.use('/api/theory-topics', theoryTopicsRoutes);
+app.use('/api/theory-logs', theoryLogsRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);
