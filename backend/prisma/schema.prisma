@@ -99,6 +99,7 @@ model User {
   suscripcionesPush      PushSubscription[]
   vuelosRegistrados      FlightLogEntry[] @relation("VuelosRegistrados")
   simuladoresRegistrados SimulatorLogEntry[] @relation("SimuladoresRegistrados")
+  temasRegistrados       TheoryLogEntry[] @relation("TemasRegistrados")
 }
 
 model Announcement {
@@ -213,9 +214,6 @@ model DocumentTemplate {
   drafts DocumentDraft[]
 }
 
-// Un documento "en camino": se creó desde una plantilla con sus datos llenados,
-// pero todavía falta que una o dos personas pongan su firma antes de quedar
-// como un Document final y definitivo.
 model DocumentDraft {
   id             Int          @id @default(autoincrement())
   templateId     Int
@@ -238,7 +236,6 @@ model DocumentDraft {
   signers DocumentSigner[]
 }
 
-// Cada persona que debe firmar un borrador (1 o 2 por documento)
 model DocumentSigner {
   id        Int       @id @default(autoincrement())
   draftId   Int
@@ -252,7 +249,6 @@ model DocumentSigner {
   @@unique([draftId, userId])
 }
 
-// Solicitud de vacaciones. Solo Admin, Gerencia y RRHH pueden ver y aprobar/rechazar.
 model VacationRequest {
   id           Int       @id @default(autoincrement())
   userId       Int
@@ -285,8 +281,6 @@ model Conversation {
   messages     ChatMessage[]
 }
 
-// Quiénes pertenecen a cada conversación. En chats DIRECT son las 2 personas;
-// en chats de AREA se sincroniza solo con quien tenga ese tag asignado.
 model ConversationParticipant {
   id             Int          @id @default(autoincrement())
   conversationId Int
@@ -312,7 +306,6 @@ model ChatMessage {
   createdAt      DateTime     @default(now())
 }
 
-// Cursos que ofrece ESPAC (ej: "Piloto Privado", "Piloto Comercial"). Solo Admin los crea.
 model Course {
   id        Int       @id @default(autoincrement())
   name      String    @unique
@@ -345,10 +338,9 @@ model Student {
   courseEnrollments StudentCourse[]
   flightLogEntries FlightLogEntry[]
   simulatorLogEntries SimulatorLogEntry[]
+  theoryLogEntries TheoryLogEntry[]
 }
 
-// Una sesión programada: clase de teoría, simulador, o vuelo. La agenda el
-// capitán del área (o Admin/Gerencia), y se notifica al instructor asignado.
 model ScheduleSession {
   id           Int      @id @default(autoincrement())
   type         String   // TEORIA | SIMULADOR | VUELO
@@ -365,9 +357,6 @@ model ScheduleSession {
   createdAt    DateTime @default(now())
 }
 
-// Solicitud interna: cualquiera le puede pedir algo a cualquiera. Quien la
-// recibe (assignee) es quien la mueve de estado; quien la creó (requester)
-// solo hace seguimiento.
 model Request {
   id           Int       @id @default(autoincrement())
   title        String
@@ -385,9 +374,6 @@ model Request {
   resolvedAt   DateTime?
 }
 
-// Cuota/pago de un alumno. El acceso a este módulo NO depende del rol, sino
-// de un permiso individual (User.canViewPayments), que solo un Admin otorga
-// persona por persona desde Usuarios. Admin y Gerencia siempre tienen acceso.
 model Payment {
   id          Int       @id @default(autoincrement())
   studentId   Int
@@ -405,8 +391,6 @@ model Payment {
   createdAt   DateTime  @default(now())
 }
 
-// Suscripción de un navegador/dispositivo a notificaciones push. Una persona
-// puede tener varias (ej: su celular y su laptop).
 model PushSubscription {
   id        Int      @id @default(autoincrement())
   userId    Int
@@ -417,9 +401,6 @@ model PushSubscription {
   createdAt DateTime @default(now())
 }
 
-// Historial de inscripciones de un alumno a distintos cursos, con su estado.
-// Es independiente del "curso principal" que se asigna al matricular (Student.courseId),
-// y permite ver/registrar todos los cursos por los que ha pasado un alumno.
 model StudentCourse {
   id          Int       @id @default(autoincrement())
   studentId   Int
@@ -431,8 +412,6 @@ model StudentCourse {
   completedAt DateTime?
 }
 
-// Tipos de avión (ej: "Cessna 172", "Piper Seneca"). Solo Admin los crea, para
-// que se puedan ir agregando según la flota real de la escuela.
 model AircraftType {
   id        Int              @id @default(autoincrement())
   name      String           @unique
@@ -440,7 +419,6 @@ model AircraftType {
   entries   FlightLogEntry[]
 }
 
-// Tipos de simulador (ej: "Simulador Redbird FMX"). Solo Admin los crea.
 model SimulatorType {
   id        Int                 @id @default(autoincrement())
   name      String              @unique
@@ -448,8 +426,6 @@ model SimulatorType {
   entries   SimulatorLogEntry[]
 }
 
-// Cada vuelo registrado de un alumno: qué avión voló, cuántas horas, y cuándo.
-// Al crearse, esas horas se suman automáticamente al total del alumno.
 model FlightLogEntry {
   id             Int          @id @default(autoincrement())
   studentId      Int
@@ -464,8 +440,6 @@ model FlightLogEntry {
   createdAt      DateTime     @default(now())
 }
 
-// Cada sesión de simulador registrada de un alumno: qué simulador usó, cuántas
-// horas, y cuándo. Al crearse, esas horas se suman automáticamente al total.
 model SimulatorLogEntry {
   id              Int           @id @default(autoincrement())
   studentId       Int
@@ -478,4 +452,28 @@ model SimulatorLogEntry {
   createdById     Int
   createdBy       User          @relation("SimuladoresRegistrados", fields: [createdById], references: [id])
   createdAt       DateTime      @default(now())
+}
+
+// Temas/materias de teoría (ej: "Meteorología", "Navegación aérea"). Solo Admin los crea.
+model TheoryTopic {
+  id        Int              @id @default(autoincrement())
+  name      String           @unique
+  createdAt DateTime         @default(now())
+  entries   TheoryLogEntry[]
+}
+
+// Cada clase de teoría registrada de un alumno: qué tema se vio, cuántas horas,
+// y cuándo. Al crearse, esas horas se suman automáticamente al total de tierra.
+model TheoryLogEntry {
+  id            Int         @id @default(autoincrement())
+  studentId     Int
+  student       Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  theoryTopicId Int
+  theoryTopic   TheoryTopic @relation(fields: [theoryTopicId], references: [id])
+  hours         Float
+  date          DateTime
+  notes         String?
+  createdById   Int
+  createdBy     User        @relation("TemasRegistrados", fields: [createdById], references: [id])
+  createdAt     DateTime    @default(now())
 }
