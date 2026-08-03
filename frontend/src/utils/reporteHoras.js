@@ -1,19 +1,8 @@
 // Arma un "reporte de horas" en HTML, listo para ver/imprimir/guardar como PDF
 // desde el navegador (mismo patrón que el estado de cuenta y los documentos).
 
-const LABEL_TIPO = { TEORIA: 'Teoría', SIMULADOR: 'Simulador', VUELO: 'Vuelo' };
-
-export function construirReporteHorasHTML({ alumno, sesiones = [], flightLogs = [], simulatorLogs = [] }) {
+export function construirReporteHorasHTML({ alumno, sesiones = [], flightLogs = [], simulatorLogs = [], theoryLogs = [] }) {
   const hoy = new Date();
-
-  const sesionesTeoria = sesiones.filter((s) => s.type === 'TEORIA');
-  const filasTeoria = sesionesTeoria.map((s) => `
-    <tr>
-      <td>${new Date(s.date).toLocaleDateString('es-PE', { timeZone: 'UTC' })}</td>
-      <td>${s.startTime}–${s.endTime}</td>
-      <td>${s.instructor ? `${s.instructor.firstName} ${s.instructor.lastName}` : '—'}</td>
-    </tr>
-  `).join('');
 
   const filasVuelos = flightLogs.map((f) => `
     <tr>
@@ -30,6 +19,15 @@ export function construirReporteHorasHTML({ alumno, sesiones = [], flightLogs = 
       <td>${Number(s.hours).toFixed(1)}</td>
       <td>${new Date(s.date).toLocaleDateString('es-PE', { timeZone: 'UTC' })}</td>
       <td>${s.notes || '—'}</td>
+    </tr>
+  `).join('');
+
+  const filasTeoria = theoryLogs.map((t) => `
+    <tr>
+      <td>${t.theoryTopic?.name || '—'}</td>
+      <td>${Number(t.hours).toFixed(1)}</td>
+      <td>${new Date(t.date).toLocaleDateString('es-PE', { timeZone: 'UTC' })}</td>
+      <td>${t.notes || '—'}</td>
     </tr>
   `).join('');
 
@@ -84,6 +82,14 @@ export function construirReporteHorasHTML({ alumno, sesiones = [], flightLogs = 
     </div>
   </div>
 
+  <h3>Detalle de teoría (tierra)</h3>
+  ${theoryLogs.length > 0 ? `
+    <table>
+      <thead><tr><th>Tema</th><th>Horas</th><th>Fecha</th><th>Notas</th></tr></thead>
+      <tbody>${filasTeoria}</tbody>
+    </table>
+  ` : '<p style="font-size:13px; color:#6b6b70;">Sin clases de teoría registradas.</p>'}
+
   <h3>Detalle de vuelos</h3>
   ${flightLogs.length > 0 ? `
     <table>
@@ -99,14 +105,6 @@ export function construirReporteHorasHTML({ alumno, sesiones = [], flightLogs = 
       <tbody>${filasSimulador}</tbody>
     </table>
   ` : '<p style="font-size:13px; color:#6b6b70;">Sin sesiones de simulador registradas.</p>'}
-
-  <h3>Clases de teoría</h3>
-  ${sesionesTeoria.length > 0 ? `
-    <table>
-      <thead><tr><th>Fecha</th><th>Horario</th><th>Instructor</th></tr></thead>
-      <tbody>${filasTeoria}</tbody>
-    </table>
-  ` : '<p style="font-size:13px; color:#6b6b70;">Sin clases de teoría registradas.</p>'}
 
   <div class="no-imprimir" style="margin-top:30px; text-align:right;">
     <button onclick="window.print()" style="padding:8px 16px; border-radius:8px; border:none; background:#1c2b4a; color:#fff; cursor:pointer;">Imprimir / Guardar como PDF</button>
