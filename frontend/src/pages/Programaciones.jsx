@@ -18,28 +18,31 @@ export default function Programaciones() {
   const [instructores, setInstructores] = useState([]);
   const [diaSeleccionado, setDiaSeleccionado] = useState(null);
   const [busquedaAlumno, setBusquedaAlumno] = useState('');
-  const [form, setForm] = useState({ type: 'TEORIA', studentId: '', instructorId: '', startTime: '09:00', endTime: '10:00', notes: '', aircraftTypeId: '', simulatorTypeId: '' });
+  const [form, setForm] = useState({ type: 'TEORIA', studentId: '', instructorId: '', startTime: '09:00', endTime: '10:00', notes: '', aircraftTypeId: '', simulatorTypeId: '', theoryTopicId: '' });
   const [editandoId, setEditandoId] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
   const [aircraftTypes, setAircraftTypes] = useState([]);
   const [simulatorTypes, setSimulatorTypes] = useState([]);
+  const [theoryTopics, setTheoryTopics] = useState([]);
 
   useEffect(() => { cargar(); }, []);
 
   async function cargar() {
-    const [s, e, u, av, sim] = await Promise.all([
+    const [s, e, u, av, sim, temas] = await Promise.all([
       api.get('/schedules'),
       api.get('/students'),
       api.get('/users'),
       api.get('/aircraft-types'),
       api.get('/simulator-types'),
+      api.get('/theory-topics'),
     ]);
     setSesiones(s.data);
     setEstudiantes(e.data);
     setInstructores(u.data.filter((x) => x.role === 'INSTRUCTOR'));
     setAircraftTypes(av.data);
     setSimulatorTypes(sim.data);
+    setTheoryTopics(temas.data);
   }
 
   const semanas = useMemo(() => generarMes(year, month), [year, month]);
@@ -79,7 +82,7 @@ export default function Programaciones() {
 
   function limpiarFormulario() {
     setEditandoId(null);
-    setForm({ type: 'TEORIA', studentId: '', instructorId: '', startTime: '09:00', endTime: '10:00', notes: '', aircraftTypeId: '', simulatorTypeId: '' });
+    setForm({ type: 'TEORIA', studentId: '', instructorId: '', startTime: '09:00', endTime: '10:00', notes: '', aircraftTypeId: '', simulatorTypeId: '', theoryTopicId: '' });
     setBusquedaAlumno('');
     setError('');
   }
@@ -89,7 +92,7 @@ export default function Programaciones() {
     setForm({
       type: s.type, studentId: s.studentId, instructorId: s.instructorId,
       startTime: s.startTime, endTime: s.endTime, notes: s.notes || '',
-      aircraftTypeId: '', simulatorTypeId: '',
+      aircraftTypeId: '', simulatorTypeId: '', theoryTopicId: '',
     });
     setBusquedaAlumno(`${s.student.firstName} ${s.student.lastName}`);
     setError('');
@@ -109,6 +112,7 @@ export default function Programaciones() {
     if (!form.instructorId) { setError('Elige un instructor'); return; }
     if (!editandoId && form.type === 'VUELO' && !form.aircraftTypeId) { setError('Elige el tipo de avión'); return; }
     if (!editandoId && form.type === 'SIMULADOR' && !form.simulatorTypeId) { setError('Elige el tipo de simulador'); return; }
+    if (!editandoId && form.type === 'TEORIA' && !form.theoryTopicId) { setError('Elige el tema de teoría'); return; }
     setGuardando(true);
     try {
       if (editandoId) {
@@ -130,6 +134,15 @@ export default function Programaciones() {
           await api.post('/simulator-logs', {
             studentId: form.studentId,
             simulatorTypeId: form.simulatorTypeId,
+            hours: horas,
+            date: diaSeleccionado,
+            notes: form.notes || 'Registrado desde Programaciones',
+          });
+        }
+        if (form.type === 'TEORIA') {
+          await api.post('/theory-logs', {
+            studentId: form.studentId,
+            theoryTopicId: form.theoryTopicId,
             hours: horas,
             date: diaSeleccionado,
             notes: form.notes || 'Registrado desde Programaciones',
@@ -281,6 +294,16 @@ export default function Programaciones() {
                   </div>
                 </div>
 
+                {!editandoId && form.type === 'TEORIA' && (
+                  <div className="field">
+                    <label>Tema de teoría</label>
+                    <select value={form.theoryTopicId} onChange={(e) => setForm({ ...form, theoryTopicId: e.target.value })}>
+                      <option value="">Selecciona el tema</option>
+                      {theoryTopics.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                  </div>
+                )}
+
                 {!editandoId && form.type === 'VUELO' && (
                   <div className="field">
                     <label>Tipo de avión</label>
@@ -357,9 +380,9 @@ export default function Programaciones() {
                     <button type="button" className="btn secondary" onClick={limpiarFormulario}>Cancelar</button>
                   )}
                 </div>
-                {!editandoId && (form.type === 'VUELO' || form.type === 'SIMULADOR') && (
+                {!editandoId && (form.type === 'VUELO' || form.type === 'SIMULADOR' || form.type === 'TEORIA') && (
                   <div style={{ fontSize: 11, color: 'var(--success)', marginTop: 6 }}>
-                    ✓ Esto también sumará las horas al historial de {form.type === 'VUELO' ? 'Vuelo' : 'Simulador'} del alumno, en Alumnos → Horas.
+                    ✓ Esto también sumará las horas al historial de {form.type === 'VUELO' ? 'Vuelo' : form.type === 'SIMULADOR' ? 'Simulador' : 'Tierra'} del alumno, en Alumnos → Horas.
                   </div>
                 )}
               </form>
