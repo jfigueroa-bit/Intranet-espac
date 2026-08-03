@@ -114,13 +114,15 @@ export default function Alumnos() {
   const [nuevaCuota, setNuevaCuota] = useState({ concept: '', amount: '', currency: 'PEN', dueDate: '' });
   const [mostrarNuevaCuota, setMostrarNuevaCuota] = useState(false);
 
-  const [nuevaSesion, setNuevaSesion] = useState({ type: 'TEORIA', instructorId: '', fecha: new Date().toISOString().slice(0, 10), startTime: '09:00', endTime: '10:00', notes: '', aircraftTypeId: '', simulatorTypeId: '' });
+  const [nuevaSesion, setNuevaSesion] = useState({ type: 'TEORIA', instructorId: '', fecha: new Date().toISOString().slice(0, 10), startTime: '09:00', endTime: '10:00', notes: '', aircraftTypeId: '', simulatorTypeId: '', theoryTopicId: '' });
   const [guardandoSesion, setGuardandoSesion] = useState(false);
 
   const [aircraftTypes, setAircraftTypes] = useState([]);
   const [simulatorTypes, setSimulatorTypes] = useState([]);
+  const [theoryTopics, setTheoryTopics] = useState([]);
   const [nuevoTipoAvion, setNuevoTipoAvion] = useState('');
   const [nuevoTipoSimulador, setNuevoTipoSimulador] = useState('');
+  const [nuevoTema, setNuevoTema] = useState('');
 
   const [flightLogs, setFlightLogs] = useState([]);
   const [cargandoFlightLogs, setCargandoFlightLogs] = useState(false);
@@ -132,10 +134,16 @@ export default function Alumnos() {
   const [mostrarNuevoSimulador, setMostrarNuevoSimulador] = useState(false);
   const [nuevoSimulador, setNuevoSimulador] = useState({ simulatorTypeId: '', hours: '', date: new Date().toISOString().slice(0, 10), notes: '' });
 
+  const [theoryLogs, setTheoryLogs] = useState([]);
+  const [cargandoTheoryLogs, setCargandoTheoryLogs] = useState(false);
+  const [mostrarNuevoTema, setMostrarNuevoTema] = useState(false);
+  const [nuevoRegistroTema, setNuevoRegistroTema] = useState({ theoryTopicId: '', hours: '', date: new Date().toISOString().slice(0, 10), notes: '' });
+
   useEffect(() => {
     cargarCursos();
     cargarAircraftTypes();
     cargarSimulatorTypes();
+    cargarTheoryTopics();
     api.get('/users').then((res) => setInstructores(res.data.filter((u) => u.role === 'INSTRUCTOR')));
     api.get('/auth/me').then((res) => {
       setPuedeVerPagos(res.data.canViewPayments || ['ADMIN', 'GERENCIA'].includes(res.data.role));
@@ -200,6 +208,25 @@ export default function Alumnos() {
     cargarSimulatorTypes();
   }
 
+  async function cargarTheoryTopics() {
+    const { data } = await api.get('/theory-topics');
+    setTheoryTopics(data);
+  }
+
+  async function crearTema(e) {
+    e.preventDefault();
+    if (!nuevoTema.trim()) return;
+    await api.post('/theory-topics', { name: nuevoTema });
+    setNuevoTema('');
+    cargarTheoryTopics();
+  }
+
+  async function eliminarTema(id) {
+    if (!confirm('¿Eliminar este tema de teoría?')) return;
+    await api.delete(`/theory-topics/${id}`);
+    cargarTheoryTopics();
+  }
+
   function abrirFicha(alumno) {
     setSeleccionado(alumno);
     setTabFicha('general');
@@ -218,6 +245,7 @@ export default function Alumnos() {
     cargarInscripciones(alumno.id);
     cargarFlightLogs(alumno.id);
     cargarSimulatorLogs(alumno.id);
+    cargarTheoryLogs(alumno.id);
     if (puedeVerPagos) cargarCuotasAlumno(alumno.id);
   }
 
@@ -254,6 +282,7 @@ export default function Alumnos() {
     if (!nuevaSesion.instructorId) { setError('Elige un instructor'); return; }
     if (nuevaSesion.type === 'VUELO' && !nuevaSesion.aircraftTypeId) { setError('Elige el tipo de avión'); return; }
     if (nuevaSesion.type === 'SIMULADOR' && !nuevaSesion.simulatorTypeId) { setError('Elige el tipo de simulador'); return; }
+    if (nuevaSesion.type === 'TEORIA' && !nuevaSesion.theoryTopicId) { setError('Elige el tema de teoría'); return; }
     setGuardandoSesion(true);
     try {
       await api.post('/schedules', {
@@ -292,7 +321,19 @@ export default function Alumnos() {
         cargarSimulatorLogs(seleccionado.id);
       }
 
-      setNuevaSesion({ type: 'TEORIA', instructorId: '', fecha: new Date().toISOString().slice(0, 10), startTime: '09:00', endTime: '10:00', notes: '', aircraftTypeId: '', simulatorTypeId: '' });
+      if (nuevaSesion.type === 'TEORIA') {
+        await api.post('/theory-logs', {
+          studentId: seleccionado.id,
+          theoryTopicId: nuevaSesion.theoryTopicId,
+          hours: horas,
+          date: nuevaSesion.fecha,
+          notes: nuevaSesion.notes || 'Registrado desde Programar',
+        });
+        setEdit((prev) => ({ ...prev, groundCourseHours: Number(prev.groundCourseHours) + horas }));
+        cargarTheoryLogs(seleccionado.id);
+      }
+
+      setNuevaSesion({ type: 'TEORIA', instructorId: '', fecha: new Date().toISOString().slice(0, 10), startTime: '09:00', endTime: '10:00', notes: '', aircraftTypeId: '', simulatorTypeId: '', theoryTopicId: '' });
       cargarSesionesAlumno(seleccionado.id);
       cargarAlumnos();
     } catch (err) {
@@ -375,6 +416,40 @@ export default function Alumnos() {
     }
   }
 
+  async function cargarTheoryLogs(studentId) {
+    setCargandoTheoryLogs(true);
+    try {
+      const { data } = await api.get('/theory-logs', { params: { studentId } });
+      setTheoryLogs(data);
+    } finally {
+      setCargandoTheoryLogs(false);
+    }
+  }
+
+  async function registrarTema(e) {
+    e.preventDefault();
+    setError('');
+    if (!nuevoRegistroTema.theoryTopicId) { setError('Elige el tema de teoría'); return; }
+    try {
+      await api.post('/theory-logs', { ...nuevoRegistroTema, studentId: seleccionado.id });
+      setEdit((prev) => ({ ...prev, groundCourseHours: Number(prev.groundCourseHours) + Number(nuevoRegistroTema.hours) }));
+      setNuevoRegistroTema({ theoryTopicId: '', hours: '', date: new Date().toISOString().slice(0, 10), notes: '' });
+      setMostrarNuevoTema(false);
+      cargarTheoryLogs(seleccionado.id);
+      cargarAlumnos();
+    } catch (err) {
+      setError(err.response?.data?.error || 'No se pudo registrar la clase de teoría');
+    }
+  }
+
+  async function eliminarRegistroTema(registro) {
+    if (!confirm('¿Eliminar este registro del historial? Se restarán esas horas del total.')) return;
+    await api.delete(`/theory-logs/${registro.id}`);
+    setEdit((prev) => ({ ...prev, groundCourseHours: Number(prev.groundCourseHours) - Number(registro.hours) }));
+    cargarTheoryLogs(seleccionado.id);
+    cargarAlumnos();
+  }
+
   async function registrarSimulador(e) {
     e.preventDefault();
     setError('');
@@ -450,7 +525,7 @@ export default function Alumnos() {
   }
 
   function verReporteHoras() {
-    const html = construirReporteHorasHTML({ alumno: seleccionado, sesiones: sesionesAlumno, flightLogs, simulatorLogs });
+    const html = construirReporteHorasHTML({ alumno: seleccionado, sesiones: sesionesAlumno, flightLogs, simulatorLogs, theoryLogs });
     const ventana = window.open('', '_blank');
     ventana.document.write(html);
     ventana.document.close();
@@ -753,6 +828,33 @@ export default function Alumnos() {
               </div>
             )}
           </div>
+
+          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            <button
+              onClick={() => setCatalogoAbierto(catalogoAbierto === 'temas' ? '' : 'temas')}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 16, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, fontWeight: 700 }}>
+                <span style={{ fontSize: 20 }}>📖</span> Temas de teoría <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-muted)' }}>({theoryTopics.length})</span>
+              </span>
+              <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>{catalogoAbierto === 'temas' ? '▲' : '▼'}</span>
+            </button>
+            {catalogoAbierto === 'temas' && (
+              <div style={{ padding: '0 16px 16px' }}>
+                <form onSubmit={crearTema} style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+                  <input value={nuevoTema} onChange={(e) => setNuevoTema(e.target.value)} placeholder="Ej: Meteorología, Navegación aérea..." />
+                  <button className="btn">Agregar</button>
+                </form>
+                {theoryTopics.map((t) => (
+                  <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                    <span style={{ fontSize: 13 }}>📘 {t.name}</span>
+                    <button className="btn danger" style={{ padding: '3px 10px', fontSize: 11 }} onClick={() => eliminarTema(t.id)}>Eliminar</button>
+                  </div>
+                ))}
+                {theoryTopics.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Todavía no has agregado ningún tema.</div>}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -883,6 +985,13 @@ export default function Alumnos() {
                       📊 Resumen
                     </button>
                     <button
+                      onClick={() => setSubTabHoras('tierra')}
+                      className={`btn ${subTabHoras === 'tierra' ? '' : 'secondary'}`}
+                      style={{ padding: '6px 14px', fontSize: 12 }}
+                    >
+                      📖 Tierra
+                    </button>
+                    <button
                       onClick={() => setSubTabHoras('vuelo')}
                       className={`btn ${subTabHoras === 'vuelo' ? '' : 'secondary'}`}
                       style={{ padding: '6px 14px', fontSize: 12 }}
@@ -934,6 +1043,63 @@ export default function Alumnos() {
                           )}
                         </div>
                       )}
+                    </div>
+                  )}
+
+                  {subTabHoras === 'tierra' && (
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                        <div style={{ fontSize: 15, fontWeight: 700 }}>📖 {Number(edit.groundCourseHours).toFixed(1)} horas totales</div>
+                        {puedeEditarHoras && !mostrarNuevoTema && (
+                          <button className="btn secondary" style={{ padding: '5px 12px', fontSize: 12 }} onClick={() => setMostrarNuevoTema(true)}>+ Registrar clase</button>
+                        )}
+                      </div>
+
+                      {mostrarNuevoTema && (
+                        <form onSubmit={registrarTema} className="card" style={{ marginBottom: 12, borderLeft: `4px solid ${COLOR_TIPO_SESION.TEORIA}` }}>
+                          <div className="field">
+                            <label>Tema</label>
+                            <select value={nuevoRegistroTema.theoryTopicId} onChange={(e) => setNuevoRegistroTema({ ...nuevoRegistroTema, theoryTopicId: e.target.value })}>
+                              <option value="">Selecciona el tema</option>
+                              {theoryTopics.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                            </select>
+                          </div>
+                          <div className="field"><label>Horas</label><input type="number" step="0.1" value={nuevoRegistroTema.hours} onChange={(e) => setNuevoRegistroTema({ ...nuevoRegistroTema, hours: e.target.value })} required /></div>
+                          <div className="field"><label>Fecha</label><input type="date" value={nuevoRegistroTema.date} onChange={(e) => setNuevoRegistroTema({ ...nuevoRegistroTema, date: e.target.value })} required /></div>
+                          <div className="field"><label>Notas (opcional)</label><input value={nuevoRegistroTema.notes} onChange={(e) => setNuevoRegistroTema({ ...nuevoRegistroTema, notes: e.target.value })} /></div>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button className="btn" style={{ padding: '5px 12px', fontSize: 12 }}>Guardar clase</button>
+                            <button type="button" className="btn secondary" style={{ padding: '5px 12px', fontSize: 12 }} onClick={() => setMostrarNuevoTema(false)}>Cancelar</button>
+                          </div>
+                        </form>
+                      )}
+
+                      {cargandoTheoryLogs && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Cargando...</div>}
+                      {!cargandoTheoryLogs && theoryLogs.length === 0 && (
+                        <div className="card" style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>📖 Sin clases de teoría registradas todavía.</div>
+                      )}
+                      <div style={{ display: 'grid', gap: 8 }}>
+                        {theoryLogs.map((t) => (
+                          <div key={t.id} className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderLeft: `4px solid ${COLOR_TIPO_SESION.TEORIA}` }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <span style={{ fontSize: 22 }}>📘</span>
+                              <div>
+                                <div style={{ fontSize: 13, fontWeight: 700 }}>{t.theoryTopic.name}</div>
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                                  {new Date(t.date).toLocaleDateString('es-PE', { timeZone: 'UTC' })} · {t.createdBy.firstName} {t.createdBy.lastName}
+                                  {t.notes && ` · ${t.notes}`}
+                                </div>
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <span style={{ fontWeight: 700, fontSize: 14 }}>{Number(t.hours).toFixed(1)} hrs</span>
+                              {puedeEditarHoras && (
+                                <button className="btn danger" style={{ padding: '3px 8px', fontSize: 10 }} onClick={() => eliminarRegistroTema(t)}>Eliminar</button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
 
@@ -1092,6 +1258,15 @@ export default function Alumnos() {
                         <div className="field"><label>Fecha</label><input type="date" value={nuevaSesion.fecha} onChange={(e) => setNuevaSesion({ ...nuevaSesion, fecha: e.target.value })} /></div>
                         <div className="field"><label>Desde</label><input type="time" value={nuevaSesion.startTime} onChange={(e) => setNuevaSesion({ ...nuevaSesion, startTime: e.target.value })} /></div>
                         <div className="field"><label>Hasta</label><input type="time" value={nuevaSesion.endTime} onChange={(e) => setNuevaSesion({ ...nuevaSesion, endTime: e.target.value })} /></div>
+                        {nuevaSesion.type === 'TEORIA' && (
+                          <div className="field">
+                            <label>Tema de teoría</label>
+                            <select value={nuevaSesion.theoryTopicId} onChange={(e) => setNuevaSesion({ ...nuevaSesion, theoryTopicId: e.target.value })}>
+                              <option value="">Selecciona el tema</option>
+                              {theoryTopics.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                            </select>
+                          </div>
+                        )}
                         {nuevaSesion.type === 'VUELO' && (
                           <div className="field">
                             <label>Tipo de avión</label>
@@ -1115,9 +1290,9 @@ export default function Alumnos() {
                       <button className="btn" style={{ marginTop: 10 }} disabled={guardandoSesion}>
                         {guardandoSesion ? 'Programando...' : 'Programar sesión'}
                       </button>
-                      {(nuevaSesion.type === 'VUELO' || nuevaSesion.type === 'SIMULADOR') && (
+                      {(nuevaSesion.type === 'VUELO' || nuevaSesion.type === 'SIMULADOR' || nuevaSesion.type === 'TEORIA') && (
                         <div style={{ fontSize: 11, color: 'var(--success)', marginTop: 6 }}>
-                          ✓ Esto también sumará las horas al historial de {nuevaSesion.type === 'VUELO' ? 'Vuelo' : 'Simulador'} automáticamente.
+                          ✓ Esto también sumará las horas al historial de {nuevaSesion.type === 'VUELO' ? 'Vuelo' : nuevaSesion.type === 'SIMULADOR' ? 'Simulador' : 'Tierra'} automáticamente.
                         </div>
                       )}
                     </form>
