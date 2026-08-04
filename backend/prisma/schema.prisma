@@ -100,6 +100,7 @@ model User {
   vuelosRegistrados      FlightLogEntry[] @relation("VuelosRegistrados")
   simuladoresRegistrados SimulatorLogEntry[] @relation("SimuladoresRegistrados")
   temasRegistrados       TheoryLogEntry[] @relation("TemasRegistrados")
+  notasActualizadas      CurriculumGrade[] @relation("NotasActualizadas")
 }
 
 model Announcement {
@@ -306,12 +307,14 @@ model ChatMessage {
   createdAt      DateTime     @default(now())
 }
 
+// Cursos que ofrece ESPAC (ej: "Piloto Privado", "Piloto Comercial"). Solo Admin los crea.
 model Course {
   id        Int       @id @default(autoincrement())
   name      String    @unique
   createdAt DateTime  @default(now())
   students  Student[]
   enrollments StudentCourse[]
+  temasCurricula TheoryTopic[]
 }
 
 model Student {
@@ -410,6 +413,7 @@ model StudentCourse {
   status      String    @default("EN_CURSO") // EN_CURSO | COMPLETADO
   enrolledAt  DateTime  @default(now())
   completedAt DateTime?
+  notasCurricula CurriculumGrade[]
 }
 
 model AircraftType {
@@ -454,12 +458,39 @@ model SimulatorLogEntry {
   createdAt       DateTime      @default(now())
 }
 
-// Temas/materias de teoría (ej: "Meteorología", "Navegación aérea"). Solo Admin los crea.
+// Temas/materias de teoría (ej: "Meteorología"). Cada tema pertenece a un curso
+// (ej: Piloto Privado) y en conjunto forman la "currícula" de ese curso. Solo
+// Admin los crea. Si no se le asigna curso, es un tema "suelto" (compatibilidad
+// con los temas creados antes de esta función).
 model TheoryTopic {
   id        Int              @id @default(autoincrement())
-  name      String           @unique
+  name      String
+  courseId  Int?
+  course    Course?          @relation(fields: [courseId], references: [id])
   createdAt DateTime         @default(now())
   entries   TheoryLogEntry[]
+  notas     CurriculumGrade[]
+
+  @@unique([name, courseId])
+}
+
+// La nota de un alumno en un tema específico de la currícula de un curso, para
+// una inscripción concreta (StudentCourse). Se crea automáticamente (en blanco)
+// para cada tema del curso apenas se inscribe al alumno, o apenas se agrega un
+// tema nuevo a un curso en el que ya haya alumnos inscritos.
+model CurriculumGrade {
+  id              Int           @id @default(autoincrement())
+  studentCourseId Int
+  studentCourse   StudentCourse @relation(fields: [studentCourseId], references: [id], onDelete: Cascade)
+  theoryTopicId   Int
+  theoryTopic     TheoryTopic   @relation(fields: [theoryTopicId], references: [id], onDelete: Cascade)
+  grade           Float?        // nota final del tema; null = todavía no calificado
+  updatedById     Int?
+  updatedBy       User?         @relation("NotasActualizadas", fields: [updatedById], references: [id])
+  updatedAt       DateTime      @updatedAt
+  createdAt       DateTime      @default(now())
+
+  @@unique([studentCourseId, theoryTopicId])
 }
 
 // Cada clase de teoría registrada de un alumno: qué tema se vio, cuántas horas,
