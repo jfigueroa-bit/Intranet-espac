@@ -33,6 +33,7 @@ const searchRoutes = require('./routes/search');
 const reportsRoutes = require('./routes/reports');
 const theoryTopicsRoutes = require('./routes/theoryTopics');
 const theoryLogsRoutes = require('./routes/theoryLogs');
+const curriculumGradesRoutes = require('./routes/curriculumGrades');
 const { setIO, salaDeUsuario } = require('./utils/socket');
 
 const app = express();
@@ -72,6 +73,7 @@ app.use('/api/search', searchRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/theory-topics', theoryTopicsRoutes);
 app.use('/api/theory-logs', theoryLogsRoutes);
+app.use('/api/curriculum-grades', curriculumGradesRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);
