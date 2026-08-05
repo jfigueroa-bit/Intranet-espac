@@ -123,6 +123,12 @@ export default function Alumnos() {
   const [nuevoTipoAvion, setNuevoTipoAvion] = useState('');
   const [nuevoTipoSimulador, setNuevoTipoSimulador] = useState('');
   const [nuevoTema, setNuevoTema] = useState('');
+  const [nuevoTemaCursoId, setNuevoTemaCursoId] = useState('');
+
+  const [curriculaPorInscripcion, setCurriculaPorInscripcion] = useState({});
+  const [cargandoCurriculaId, setCargandoCurriculaId] = useState(null);
+  const [inscripcionExpandida, setInscripcionExpandida] = useState(null);
+  const [guardandoNotaId, setGuardandoNotaId] = useState(null);
 
   const [flightLogs, setFlightLogs] = useState([]);
   const [cargandoFlightLogs, setCargandoFlightLogs] = useState(false);
@@ -216,9 +222,49 @@ export default function Alumnos() {
   async function crearTema(e) {
     e.preventDefault();
     if (!nuevoTema.trim()) return;
-    await api.post('/theory-topics', { name: nuevoTema });
+    await api.post('/theory-topics', { name: nuevoTema, courseId: nuevoTemaCursoId || null });
     setNuevoTema('');
+    setNuevoTemaCursoId('');
     cargarTheoryTopics();
+  }
+
+  async function cargarCurricula(studentCourseId) {
+    setCargandoCurriculaId(studentCourseId);
+    try {
+      const { data } = await api.get('/curriculum-grades', { params: { studentCourseId } });
+      setCurriculaPorInscripcion((prev) => ({ ...prev, [studentCourseId]: data }));
+    } finally {
+      setCargandoCurriculaId(null);
+    }
+  }
+
+  function alternarCurricula(studentCourseId) {
+    if (inscripcionExpandida === studentCourseId) {
+      setInscripcionExpandida(null);
+      return;
+    }
+    setInscripcionExpandida(studentCourseId);
+    if (!curriculaPorInscripcion[studentCourseId]) cargarCurricula(studentCourseId);
+  }
+
+  async function guardarNota(studentCourseId, notaId, valor) {
+    setGuardandoNotaId(notaId);
+    try {
+      const { data } = await api.patch(`/curriculum-grades/${notaId}`, { grade: valor });
+      setCurriculaPorInscripcion((prev) => ({
+        ...prev,
+        [studentCourseId]: prev[studentCourseId].map((n) => (n.id === notaId ? data : n)),
+      }));
+    } finally {
+      setGuardandoNotaId(null);
+    }
+  }
+
+  function promedioCurricula(notas) {
+    const calificadas = notas.filter((n) => n.grade !== null && n.grade !== undefined);
+    if (calificadas.length === 0) return null;
+    const suma = calificadas.reduce((s, n) => s + n.grade, 0);
+    return { promedio: suma / calificadas.length, calificadas: calificadas.length, total: notas.length };
   }
 
   async function eliminarTema(id) {
@@ -841,13 +887,24 @@ export default function Alumnos() {
             </button>
             {catalogoAbierto === 'temas' && (
               <div style={{ padding: '0 16px 16px' }}>
-                <form onSubmit={crearTema} style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 0 }}>
+                  Si le asignas un curso, ese tema pasa a formar parte de su currícula: cada vez que se
+                  inscriba a un alumno en ese curso, el tema aparece automáticamente en su lista de notas.
+                </p>
+                <form onSubmit={crearTema} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: 8, marginBottom: 14 }}>
                   <input value={nuevoTema} onChange={(e) => setNuevoTema(e.target.value)} placeholder="Ej: Meteorología, Navegación aérea..." />
+                  <select value={nuevoTemaCursoId} onChange={(e) => setNuevoTemaCursoId(e.target.value)}>
+                    <option value="">Sin curso (tema suelto)</option>
+                    {cursos.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
                   <button className="btn">Agregar</button>
                 </form>
                 {theoryTopics.map((t) => (
                   <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-                    <span style={{ fontSize: 13 }}>📘 {t.name}</span>
+                    <span style={{ fontSize: 13 }}>
+                      📘 {t.name}
+                      {t.course && <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>· 🎓 {t.course.name}</span>}
+                    </span>
                     <button className="btn danger" style={{ padding: '3px 10px', fontSize: 11 }} onClick={() => eliminarTema(t.id)}>Eliminar</button>
                   </div>
                 ))}
@@ -939,37 +996,81 @@ export default function Alumnos() {
                     <div className="card" style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>🎓 Este alumno no tiene cursos registrados en su historial todavía.</div>
                   )}
                   <div style={{ display: 'grid', gap: 8 }}>
-                    {inscripciones.map((insc) => (
+                    {inscripciones.map((insc) => {
+                      const notas = curriculaPorInscripcion[insc.id];
+                      const resumen = notas ? promedioCurricula(notas) : null;
+                      return (
                       <div key={insc.id} className="card" style={{
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                         borderLeft: `4px solid ${insc.status === 'COMPLETADO' ? 'var(--success)' : '#e0a013'}`,
                       }}>
-                        <div>
-                          <div style={{ fontWeight: 700, fontSize: 14 }}>🎓 {insc.course.name}</div>
-                          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                            Inscrito el {new Date(insc.enrolledAt).toLocaleDateString('es-PE')}
-                            {insc.completedAt && ` · Completado el ${new Date(insc.completedAt).toLocaleDateString('es-PE')}`}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <div style={{ fontWeight: 700, fontSize: 14 }}>🎓 {insc.course.name}</div>
+                            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                              Inscrito el {new Date(insc.enrolledAt).toLocaleDateString('es-PE')}
+                              {insc.completedAt && ` · Completado el ${new Date(insc.completedAt).toLocaleDateString('es-PE')}`}
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{
+                              fontSize: 11, fontWeight: 600, padding: '4px 12px', borderRadius: 999,
+                              background: insc.status === 'COMPLETADO' ? '#e6f4ea' : '#fff4e0',
+                              color: insc.status === 'COMPLETADO' ? 'var(--success)' : '#a6650a',
+                            }}>
+                              {insc.status === 'COMPLETADO' ? '✓ Completado' : '⏳ En curso'}
+                            </span>
+                            <button className="btn secondary" style={{ padding: '3px 8px', fontSize: 11 }} onClick={() => alternarCurricula(insc.id)}>
+                              📋 Currícula{inscripcionExpandida === insc.id ? ' ▲' : ' ▼'}
+                            </button>
+                            {puedeGestionar && (
+                              <>
+                                <button className="btn secondary" style={{ padding: '3px 8px', fontSize: 11 }} onClick={() => alternarEstadoInscripcion(insc)}>
+                                  {insc.status === 'COMPLETADO' ? 'En curso' : 'Completar'}
+                                </button>
+                                <button className="btn danger" style={{ padding: '3px 8px', fontSize: 11 }} onClick={() => eliminarInscripcion(insc.id)}>Quitar</button>
+                              </>
+                            )}
                           </div>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{
-                            fontSize: 11, fontWeight: 600, padding: '4px 12px', borderRadius: 999,
-                            background: insc.status === 'COMPLETADO' ? '#e6f4ea' : '#fff4e0',
-                            color: insc.status === 'COMPLETADO' ? 'var(--success)' : '#a6650a',
-                          }}>
-                            {insc.status === 'COMPLETADO' ? '✓ Completado' : '⏳ En curso'}
-                          </span>
-                          {puedeGestionar && (
-                            <>
-                              <button className="btn secondary" style={{ padding: '3px 8px', fontSize: 11 }} onClick={() => alternarEstadoInscripcion(insc)}>
-                                {insc.status === 'COMPLETADO' ? 'En curso' : 'Completar'}
-                              </button>
-                              <button className="btn danger" style={{ padding: '3px 8px', fontSize: 11 }} onClick={() => eliminarInscripcion(insc.id)}>Quitar</button>
-                            </>
-                          )}
-                        </div>
+
+                        {inscripcionExpandida === insc.id && (
+                          <div style={{ borderTop: '1px solid var(--border)', marginTop: 10, paddingTop: 10 }}>
+                            {cargandoCurriculaId === insc.id && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Cargando currícula...</div>}
+                            {notas && notas.length === 0 && (
+                              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Este curso todavía no tiene temas de teoría asignados en Catálogos.</div>
+                            )}
+                            {notas && notas.length > 0 && (
+                              <>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                  <span style={{ fontSize: 12, fontWeight: 700 }}>Notas por tema</span>
+                                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)' }}>
+                                    {resumen ? `Promedio: ${resumen.promedio.toFixed(1)} (${resumen.calificadas}/${resumen.total} calificados)` : 'Sin notas todavía'}
+                                  </span>
+                                </div>
+                                {notas.map((n) => (
+                                  <div key={n.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 0', borderBottom: '1px solid var(--border)' }}>
+                                    <span style={{ fontSize: 13 }}>📘 {n.theoryTopic.name}</span>
+                                    <input
+                                      type="number" step="0.1" min="0" max="20"
+                                      key={`${n.id}-${n.grade}`}
+                                      defaultValue={n.grade ?? ''}
+                                      placeholder="—"
+                                      disabled={guardandoNotaId === n.id || !['ADMIN', 'GERENCIA', 'INSTRUCTOR'].includes(user?.role)}
+                                      onBlur={(e) => {
+                                        const valor = e.target.value === '' ? null : e.target.value;
+                                        if (valor !== n.grade) guardarNota(insc.id, n.id, valor);
+                                      }}
+                                      style={{ width: 60, padding: '3px 6px', fontSize: 12, textAlign: 'center' }}
+                                    />
+                                  </div>
+                                ))}
+                              </>
+                            )}
+                          </div>
+                        )}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
