@@ -1,10 +1,24 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useChatUnread } from '../context/ChatUnreadContext.jsx';
+import { useDocumentsUnread } from '../context/DocumentsUnreadContext.jsx';
+
+function BadgeRojo({ count }) {
+  if (!count || count <= 0) return null;
+  return (
+    <span style={{
+      background: 'var(--danger)', color: '#fff', borderRadius: 999, fontSize: 11, fontWeight: 700,
+      minWidth: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px',
+    }}>
+      {count}
+    </span>
+  );
+}
 
 export default function Sidebar() {
   const { user, logout } = useAuth();
   const { unreadCount } = useChatUnread();
+  const { pendingCount } = useDocumentsUnread();
 
   return (
     <div className="sidebar">
@@ -14,18 +28,14 @@ export default function Sidebar() {
       <NavLink to="/calendario">Calendario</NavLink>
       <NavLink to="/perfil">Mi Perfil</NavLink>
       <NavLink to="/compania">Compañía</NavLink>
-      <NavLink to="/documentos">Documentos</NavLink>
+      <NavLink to="/documentos" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span>Documentos</span>
+        <BadgeRojo count={pendingCount} />
+      </NavLink>
       <NavLink to="/vacaciones">Vacaciones</NavLink>
       <NavLink to="/chat" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span>Chat interno</span>
-        {unreadCount > 0 && (
-          <span style={{
-            background: 'var(--danger)', color: '#fff', borderRadius: 999, fontSize: 11, fontWeight: 700,
-            minWidth: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px',
-          }}>
-            {unreadCount}
-          </span>
-        )}
+        <BadgeRojo count={unreadCount} />
       </NavLink>
       <NavLink to="/alumnos">Alumnos</NavLink>
       <NavLink to="/programaciones">Programaciones</NavLink>
