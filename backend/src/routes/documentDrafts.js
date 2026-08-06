@@ -155,7 +155,7 @@ router.post('/:id/firmar', requireAuth, async (req, res) => {
   const faltan = actualizado.signers.some((s) => !s.signedAt);
 
   if (!faltan) {
-    // Ya firmaron todos: se arma el documento final y queda guardado en la carpeta personal del dueño
+    // Ya firmaron todos: se arma el documento final en HTML
     const fechaTexto = actualizado.fecha.toLocaleDateString('es-PE', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
     const principal = actualizado.signers.find((s) => s.order === 1);
     const segundo = actualizado.signers.find((s) => s.order === 2);
@@ -183,28 +183,46 @@ router.post('/:id/firmar', requireAuth, async (req, res) => {
     });
 
     const fileData = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
+    const nombreArchivoBase = `${actualizado.template.name.replace(/\s+/g, '-')}-${principal.user.firstName}-${actualizado.fecha.toISOString().slice(0, 10)}.html`;
+    const tituloBase = `${actualizado.template.name} — ${principal.user.firstName} ${principal.user.lastName}`;
 
-    const documentoFinal = await prisma.document.create({
-      data: {
-        title: `${actualizado.template.name} — ${principal.user.firstName} ${principal.user.lastName}`,
-        fileName: `${actualizado.template.name.replace(/\s+/g, '-')}-${principal.user.firstName}-${actualizado.fecha.toISOString().slice(0, 10)}.html`,
-        mimeType: 'text/html',
-        fileData,
-        scope: 'PERSONAL',
-        documentTypeId: actualizado.documentTypeId,
-        ownerId: actualizado.ownerId,
-        uploadedById: actualizado.createdById,
-      },
-    });
+    // "Ambas partes" = quien mandó a firmar (createdBy) y todos los firmantes (owner + firmante2 si existe).
+    // Se guarda una copia en la biblioteca PERSONAL de cada persona distinta involucrada, para que
+    // a todas les aparezca en su propio apartado de Documentos, no solo al dueño principal.
+    const idsInvolucrados = new Set([
+      actualizado.ownerId,
+      actualizado.createdById,
+      ...actualizado.signers.map((s) => s.userId),
+    ]);
+
+    const documentosCreados = await Promise.all(
+      [...idsInvolucrados].map((personaId) =>
+        prisma.document.create({
+          data: {
+            title: tituloBase,
+            fileName: nombreArchivoBase,
+            mimeType: 'text/html',
+            fileData,
+            scope: 'PERSONAL',
+            documentTypeId: actualizado.documentTypeId,
+            ownerId: personaId,
+            uploadedById: actualizado.createdById,
+          },
+        })
+      )
+    );
+
+    // El documento "principal" que queda enlazado al draft es el del dueño original (owner),
+    // para no romper nada que ya dependa de draft.documentId.
+    const documentoDelDueño = documentosCreados.find((d) => d.ownerId === actualizado.ownerId) || documentosCreados[0];
 
     await prisma.documentDraft.update({
       where: { id },
-      data: { status: 'COMPLETADO', documentId: documentoFinal.id },
+      data: { status: 'COMPLETADO', documentId: documentoDelDueño.id },
     });
 
-    const aAvisar = new Set([actualizado.createdById, actualizado.ownerId]);
     await Promise.all(
-      [...aAvisar].map((userId) =>
+      [...idsInvolucrados].map((userId) =>
         notificar({
           userId,
           type: 'FIRMA',
