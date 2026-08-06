@@ -77,10 +77,8 @@ export default function Documentos() {
   const [enviandoFirma, setEnviandoFirma] = useState(false);
   const [miFirmaGuardada, setMiFirmaGuardada] = useState(null);
 
-  const esJefe = usuarios.some((u) => u.managerId === user?.id);
-  const puedeGestionar = esAdmin || esRRHH || esJefe;
-
-  const personasDisponibles = esAdmin || esRRHH ? usuarios : usuarios.filter((u) => u.managerId === user?.id);
+const puedeGestionar = true;
+const personasDisponibles = usuarios;
 
   useEffect(() => {
     cargarBase();
