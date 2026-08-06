@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App.jsx';
 import { AuthProvider } from './context/AuthContext.jsx';
 import { ChatUnreadProvider } from './context/ChatUnreadContext.jsx';
+import { DocumentsUnreadProvider } from './context/DocumentsUnreadContext.jsx';
 import './styles/global.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -11,7 +12,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <BrowserRouter>
       <AuthProvider>
         <ChatUnreadProvider>
-          <App />
+          <DocumentsUnreadProvider>
+            <App />
+          </DocumentsUnreadProvider>
         </ChatUnreadProvider>
       </AuthProvider>
     </BrowserRouter>
