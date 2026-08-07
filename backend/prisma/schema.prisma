@@ -318,6 +318,22 @@ model Course {
   students  Student[]
   enrollments StudentCourse[]
   temasCurricula TheoryTopic[]
+  promotions Promotion[]
+}
+
+// Grupo de alumnos del mismo curso que entraron juntos (ej: "Piloto Privado -
+// Promo 3"). Permite programar sesiones o eventos para todo el grupo a la vez
+// en Programaciones, en vez de uno por uno.
+model Promotion {
+  id        Int      @id @default(autoincrement())
+  name      String   // ej: "Piloto Privado - Promo 3"
+  courseId  Int
+  course    Course   @relation(fields: [courseId], references: [id])
+  createdAt DateTime @default(now())
+
+  students   Student[]
+  sesiones   ScheduleSession[]   @relation("SesionesPromocion")
+  bloques    ScheduleBlockNote[] @relation("BloquesPromocion")
 }
 
 model Student {
@@ -330,6 +346,8 @@ model Student {
   phone             String?
   courseId          Int?
   course            Course?  @relation(fields: [courseId], references: [id])
+  promotionId       Int?     // grupo/promoción al que pertenece, dentro de su curso
+  promotion         Promotion? @relation(fields: [promotionId], references: [id])
   enrollmentDate    DateTime @default(now()) // fecha de ingreso/matrícula (editable, distinta de createdAt)
   groundCourseHours Float    @default(0) // horas de curso en tierra
   flightHours       Float    @default(0) // horas de vuelo
@@ -358,6 +376,8 @@ model ScheduleSession {
   instructorId Int
   instructor   User     @relation("SesionesComoInstructor", fields: [instructorId], references: [id])
   notes        String?
+  promotionId  Int?     // si se creó al programar una promoción completa, queda marcada con el grupo
+  promotion    Promotion? @relation("SesionesPromocion", fields: [promotionId], references: [id])
   createdById  Int
   createdBy    User     @relation("SesionesCreadas", fields: [createdById], references: [id])
   createdAt    DateTime @default(now())
@@ -373,6 +393,8 @@ model ScheduleBlockNote {
   title       String
   description String?  @db.Text
   dates       Json     // arreglo de fechas "YYYY-MM-DD" a las que aplica esta nota
+  promotionId Int?     // opcional: si el evento es específico de una promoción
+  promotion   Promotion? @relation("BloquesPromocion", fields: [promotionId], references: [id])
   createdById Int
   createdBy   User     @relation("BloquesCreados", fields: [createdById], references: [id])
   createdAt   DateTime @default(now())
