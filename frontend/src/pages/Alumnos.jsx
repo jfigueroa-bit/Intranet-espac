@@ -81,6 +81,7 @@ export default function Alumnos() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [alumnos, setAlumnos] = useState([]);
   const [cursos, setCursos] = useState([]);
+  const [promociones, setPromociones] = useState([]);
   const [instructores, setInstructores] = useState([]);
   const [busqueda, setBusqueda] = useState('');
   const [seleccionado, setSeleccionado] = useState(null);
@@ -93,13 +94,14 @@ export default function Alumnos() {
   const [catalogoAbierto, setCatalogoAbierto] = useState('cursos');
 
   const [mostrarNuevo, setMostrarNuevo] = useState(false);
-  const [nuevo, setNuevo] = useState({ firstName: '', lastName: '', email: '', phone: '', courseId: '', enrollmentDate: new Date().toISOString().slice(0, 10) });
+  const [nuevo, setNuevo] = useState({ firstName: '', lastName: '', email: '', phone: '', courseId: '', promotionId: '', enrollmentDate: new Date().toISOString().slice(0, 10) });
 
   const [filasImportar, setFilasImportar] = useState(null);
   const [importando, setImportando] = useState(false);
   const [resultadoImport, setResultadoImport] = useState(null);
 
   const [nuevoCurso, setNuevoCurso] = useState('');
+  const [nuevaPromocion, setNuevaPromocion] = useState({ name: '', courseId: '' });
 
   const [sesionesAlumno, setSesionesAlumno] = useState([]);
   const [cargandoSesiones, setCargandoSesiones] = useState(false);
@@ -147,6 +149,7 @@ export default function Alumnos() {
 
   useEffect(() => {
     cargarCursos();
+    cargarPromociones();
     cargarAircraftTypes();
     cargarSimulatorTypes();
     cargarTheoryTopics();
@@ -174,6 +177,11 @@ export default function Alumnos() {
   async function cargarCursos() {
     const { data } = await api.get('/courses');
     setCursos(data);
+  }
+
+  async function cargarPromociones() {
+    const { data } = await api.get('/promotions');
+    setPromociones(data);
   }
 
   async function cargarAircraftTypes() {
@@ -282,6 +290,7 @@ export default function Alumnos() {
       firstName: alumno.firstName, lastName: alumno.lastName,
       email: alumno.email || '', phone: alumno.phone || '',
       courseId: alumno.courseId || '',
+      promotionId: alumno.promotionId || '',
       enrollmentDate: alumno.enrollmentDate ? alumno.enrollmentDate.slice(0, 10) : '',
       groundCourseHours: alumno.groundCourseHours, flightHours: alumno.flightHours, simulatorHours: alumno.simulatorHours,
       notes: alumno.notes || '',
@@ -584,6 +593,7 @@ export default function Alumnos() {
       const { data } = await api.patch(`/students/${seleccionado.id}`, {
         ...edit,
         courseId: edit.courseId || null,
+        promotionId: edit.promotionId || null,
       });
       setSeleccionado(data);
       cargarAlumnos();
@@ -610,8 +620,8 @@ export default function Alumnos() {
     e.preventDefault();
     setError('');
     try {
-      await api.post('/students', { ...nuevo, courseId: nuevo.courseId || null });
-      setNuevo({ firstName: '', lastName: '', email: '', phone: '', courseId: '', enrollmentDate: new Date().toISOString().slice(0, 10) });
+      await api.post('/students', { ...nuevo, courseId: nuevo.courseId || null, promotionId: nuevo.promotionId || null });
+      setNuevo({ firstName: '', lastName: '', email: '', phone: '', courseId: '', promotionId: '', enrollmentDate: new Date().toISOString().slice(0, 10) });
       setMostrarNuevo(false);
       cargarAlumnos();
     } catch (err) {
@@ -662,6 +672,20 @@ export default function Alumnos() {
     cargarCursos();
   }
 
+  async function crearPromocion(e) {
+    e.preventDefault();
+    if (!nuevaPromocion.name.trim() || !nuevaPromocion.courseId) return;
+    await api.post('/promotions', nuevaPromocion);
+    setNuevaPromocion({ name: '', courseId: '' });
+    cargarPromociones();
+  }
+
+  async function eliminarPromocion(id) {
+    if (!confirm('¿Eliminar esta promoción? Los alumnos que la tenían quedan sin promoción asignada.')) return;
+    await api.delete(`/promotions/${id}`);
+    cargarPromociones();
+  }
+
   return (
     <div>
       <h2 style={{ marginTop: 0 }}>Alumnos</h2>
@@ -710,10 +734,20 @@ export default function Alumnos() {
                   <div className="field"><label>Fecha de ingreso</label><input type="date" value={nuevo.enrollmentDate} onChange={(e) => setNuevo({ ...nuevo, enrollmentDate: e.target.value })} required /></div>
                   <div className="field">
                     <label>Curso (opcional)</label>
-                    <select value={nuevo.courseId} onChange={(e) => setNuevo({ ...nuevo, courseId: e.target.value })}>
+                    <select value={nuevo.courseId} onChange={(e) => setNuevo({ ...nuevo, courseId: e.target.value, promotionId: '' })}>
                       <option value="">Sin curso</option>
                       {cursos.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
+                  </div>
+                  <div className="field">
+                    <label>Promoción (opcional)</label>
+                    <select value={nuevo.promotionId} onChange={(e) => setNuevo({ ...nuevo, promotionId: e.target.value })} disabled={!nuevo.courseId}>
+                      <option value="">Sin promoción</option>
+                      {promociones.filter((p) => p.courseId === Number(nuevo.courseId)).map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                    {!nuevo.courseId && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Elige un curso primero</div>}
                   </div>
                 </div>
                 {error && <div className="error-text">{error}</div>}
@@ -755,6 +789,7 @@ export default function Alumnos() {
                   <th>Código</th>
                   <th>Nombre</th>
                   <th>Curso</th>
+                  <th>Promoción</th>
                   <th>Fecha de ingreso</th>
                   <th>Hrs. tierra</th>
                   <th>Hrs. vuelo</th>
@@ -774,6 +809,7 @@ export default function Alumnos() {
                       </div>
                     </td>
                     <td>{a.course?.name || '—'}</td>
+                    <td>{a.promotion?.name || '—'}</td>
                     <td>{new Date(a.enrollmentDate).toLocaleDateString('es-PE', { timeZone: 'UTC' })}</td>
                     <td>{a.groundCourseHours}</td>
                     <td>{a.flightHours}</td>
@@ -781,7 +817,7 @@ export default function Alumnos() {
                   </tr>
                 ))}
                 {alumnos.length === 0 && (
-                  <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 16 }}>No se encontraron alumnos.</td></tr>
+                  <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 16 }}>No se encontraron alumnos.</td></tr>
                 )}
               </tbody>
             </table>
@@ -817,6 +853,45 @@ export default function Alumnos() {
                   </div>
                 ))}
                 {cursos.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Todavía no has creado ningún curso.</div>}
+              </div>
+            )}
+          </div>
+
+          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            <button
+              onClick={() => setCatalogoAbierto(catalogoAbierto === 'promociones' ? '' : 'promociones')}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 16, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, fontWeight: 700 }}>
+                <span style={{ fontSize: 20 }}>👥</span> Promociones <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-muted)' }}>({promociones.length})</span>
+              </span>
+              <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>{catalogoAbierto === 'promociones' ? '▲' : '▼'}</span>
+            </button>
+            {catalogoAbierto === 'promociones' && (
+              <div style={{ padding: '0 16px 16px' }}>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 0 }}>
+                  Un grupo de alumnos del mismo curso que entraron juntos (ej: "Piloto Privado - Promo 3").
+                  En Programaciones puedes programar una sesión para toda la promoción de una sola vez.
+                </p>
+                <form onSubmit={crearPromocion} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: 8, marginBottom: 14 }}>
+                  <input value={nuevaPromocion.name} onChange={(e) => setNuevaPromocion({ ...nuevaPromocion, name: e.target.value })} placeholder="Ej: Piloto Privado - Promo 3" />
+                  <select value={nuevaPromocion.courseId} onChange={(e) => setNuevaPromocion({ ...nuevaPromocion, courseId: e.target.value })}>
+                    <option value="">Elige el curso</option>
+                    {cursos.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                  <button className="btn">Crear</button>
+                </form>
+                {promociones.map((p) => (
+                  <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                    <div>
+                      <strong style={{ fontSize: 13 }}>{p.name}</strong>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>· 🎓 {p.course?.name}</span>
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>{p._count?.students ?? 0} alumno(s)</span>
+                    </div>
+                    <button className="btn danger" style={{ padding: '3px 10px', fontSize: 11 }} onClick={() => eliminarPromocion(p.id)}>Eliminar</button>
+                  </div>
+                ))}
+                {promociones.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Todavía no has creado ninguna promoción.</div>}
               </div>
             )}
           </div>
@@ -961,9 +1036,18 @@ export default function Alumnos() {
                   <div className="field"><label>Fecha de ingreso</label><input type="date" value={edit.enrollmentDate} onChange={(e) => setEdit({ ...edit, enrollmentDate: e.target.value })} disabled={!puedeGestionar} /></div>
                   <div className="field">
                     <label>Curso principal</label>
-                    <select value={edit.courseId} onChange={(e) => setEdit({ ...edit, courseId: e.target.value })} disabled={!puedeGestionar}>
+                    <select value={edit.courseId} onChange={(e) => setEdit({ ...edit, courseId: e.target.value, promotionId: '' })} disabled={!puedeGestionar}>
                       <option value="">Sin curso</option>
                       {cursos.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="field">
+                    <label>Promoción</label>
+                    <select value={edit.promotionId} onChange={(e) => setEdit({ ...edit, promotionId: e.target.value })} disabled={!puedeGestionar || !edit.courseId}>
+                      <option value="">Sin promoción</option>
+                      {promociones.filter((p) => p.courseId === Number(edit.courseId)).map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
                     </select>
                   </div>
                   <div className="field"><label>Notas</label><textarea rows={3} value={edit.notes} onChange={(e) => setEdit({ ...edit, notes: e.target.value })} disabled={!puedeGestionar} /></div>
