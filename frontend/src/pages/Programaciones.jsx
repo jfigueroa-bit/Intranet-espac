@@ -26,16 +26,28 @@ export default function Programaciones() {
   const [simulatorTypes, setSimulatorTypes] = useState([]);
   const [theoryTopics, setTheoryTopics] = useState([]);
 
+  // --- Eventos/notas de varios días (Secretaría, o quien tenga el permiso) ---
+  const [puedeGestionarBloques, setPuedeGestionarBloques] = useState(false);
+  const [bloques, setBloques] = useState([]);
+  const [modoBloque, setModoBloque] = useState(false);
+  const [diasBloqueSeleccionados, setDiasBloqueSeleccionados] = useState([]);
+  const [formBloque, setFormBloque] = useState({ title: '', description: '' });
+  const [editandoBloqueId, setEditandoBloqueId] = useState(null);
+  const [guardandoBloque, setGuardandoBloque] = useState(false);
+  const [errorBloque, setErrorBloque] = useState('');
+
   useEffect(() => { cargar(); }, []);
 
   async function cargar() {
-    const [s, e, u, av, sim, temas] = await Promise.all([
+    const [s, e, u, av, sim, temas, b, yo] = await Promise.all([
       api.get('/schedules'),
       api.get('/students'),
       api.get('/users'),
       api.get('/aircraft-types'),
       api.get('/simulator-types'),
       api.get('/theory-topics'),
+      api.get('/schedules/bloques'),
+      api.get('/auth/me'),
     ]);
     setSesiones(s.data);
     setEstudiantes(e.data);
@@ -43,6 +55,8 @@ export default function Programaciones() {
     setAircraftTypes(av.data);
     setSimulatorTypes(sim.data);
     setTheoryTopics(temas.data);
+    setBloques(b.data);
+    setPuedeGestionarBloques(yo.data.role === 'ADMIN' || !!yo.data.canManageScheduleBlocks);
   }
 
   const semanas = useMemo(() => generarMes(year, month), [year, month]);
@@ -56,6 +70,17 @@ export default function Programaciones() {
     });
     return mapa;
   }, [sesiones]);
+
+  const bloquesPorDia = useMemo(() => {
+    const mapa = {};
+    bloques.forEach((b) => {
+      (b.dates || []).forEach((fecha) => {
+        if (!mapa[fecha]) mapa[fecha] = [];
+        mapa[fecha].push(b);
+      });
+    });
+    return mapa;
+  }, [bloques]);
 
   const alumnosFiltrados = useMemo(() => {
     if (!busquedaAlumno.trim()) return estudiantes.slice(0, 8);
@@ -165,8 +190,72 @@ export default function Programaciones() {
     cargar();
   }
 
+  function activarModoBloque() {
+    setModoBloque(true);
+    setDiasBloqueSeleccionados([]);
+    setEditandoBloqueId(null);
+    setFormBloque({ title: '', description: '' });
+    setErrorBloque('');
+  }
+
+  function cancelarModoBloque() {
+    setModoBloque(false);
+    setDiasBloqueSeleccionados([]);
+    setEditandoBloqueId(null);
+    setFormBloque({ title: '', description: '' });
+    setErrorBloque('');
+  }
+
+  function alternarDiaBloque(fecha) {
+    const key = aFechaLocal(fecha);
+    setDiasBloqueSeleccionados((dias) =>
+      dias.includes(key) ? dias.filter((d) => d !== key) : [...dias, key].sort()
+    );
+  }
+
+  function empezarEdicionBloque(b) {
+    setModoBloque(true);
+    setEditandoBloqueId(b.id);
+    setDiasBloqueSeleccionados([...b.dates].sort());
+    setFormBloque({ title: b.title, description: b.description || '' });
+    setErrorBloque('');
+  }
+
+  async function guardarBloque(e) {
+    e.preventDefault();
+    setErrorBloque('');
+    if (!formBloque.title.trim()) { setErrorBloque('Ponle un título al evento'); return; }
+    if (diasBloqueSeleccionados.length === 0) { setErrorBloque('Selecciona al menos un día en el calendario'); return; }
+    setGuardandoBloque(true);
+    try {
+      if (editandoBloqueId) {
+        await api.patch(`/schedules/bloques/${editandoBloqueId}`, {
+          title: formBloque.title, description: formBloque.description, dates: diasBloqueSeleccionados,
+        });
+      } else {
+        await api.post('/schedules/bloques', {
+          title: formBloque.title, description: formBloque.description, dates: diasBloqueSeleccionados,
+        });
+      }
+      cancelarModoBloque();
+      cargar();
+    } catch (err) {
+      setErrorBloque(err.response?.data?.error || 'No se pudo guardar el evento');
+    } finally {
+      setGuardandoBloque(false);
+    }
+  }
+
+  async function eliminarBloque(id) {
+    if (!confirm('¿Eliminar este evento de varios días?')) return;
+    await api.delete(`/schedules/bloques/${id}`);
+    if (editandoBloqueId === id) cancelarModoBloque();
+    cargar();
+  }
+
   const hoyKey = aFechaLocal(new Date());
   const sesionesDelDia = diaSeleccionado ? sesionesPorDia[diaSeleccionado] || [] : [];
+  const bloquesDelDia = diaSeleccionado ? bloquesPorDia[diaSeleccionado] || [] : [];
   const alumnoElegido = estudiantes.find((e) => e.id === Number(form.studentId));
 
   return (
@@ -176,6 +265,20 @@ export default function Programaciones() {
         Sesiones de teoría, simulador y vuelo. Haz clic en un día para ver o programar sesiones.
       </p>
 
+      {puedeGestionarBloques && (
+        <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
+          {!modoBloque ? (
+            <button className="btn secondary" style={{ padding: '6px 14px', fontSize: 13 }} onClick={activarModoBloque}>
+              📌 Seleccionar varios días para un evento
+            </button>
+          ) : (
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              📌 Modo de selección activo — haz clic en los días del calendario para agregarlos o quitarlos.
+            </span>
+          )}
+        </div>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20 }}>
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
@@ -184,13 +287,17 @@ export default function Programaciones() {
             <button className="btn secondary" onClick={() => cambiarMes(1)}>Siguiente →</button>
           </div>
 
-          <div style={{ display: 'flex', gap: 14, marginBottom: 10, fontSize: 12 }}>
+          <div style={{ display: 'flex', gap: 14, marginBottom: 10, fontSize: 12, flexWrap: 'wrap' }}>
             {TIPOS.map((t) => (
               <div key={t.value} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <span>{ICONO_TIPO[t.value]}</span>
                 {t.label}
               </div>
             ))}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span>📌</span>
+              Evento de varios días
+            </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
@@ -202,16 +309,18 @@ export default function Programaciones() {
             {semanas.flat().map(({ fecha, delMes }, i) => {
               const key = aFechaLocal(fecha);
               const sesionesDia = sesionesPorDia[key] || [];
+              const bloquesDia = bloquesPorDia[key] || [];
               const esHoy = key === hoyKey;
               const seleccionado = key === diaSeleccionado;
+              const enBloque = diasBloqueSeleccionados.includes(key);
               return (
                 <div
                   key={i}
-                  onClick={() => seleccionarDia(fecha)}
+                  onClick={() => (modoBloque ? alternarDiaBloque(fecha) : seleccionarDia(fecha))}
                   style={{
                     minHeight: 70, padding: 6, borderRadius: 8, cursor: 'pointer',
-                    border: seleccionado ? '2px solid var(--primary)' : '1px solid var(--border)',
-                    background: delMes ? '#fff' : '#fafafa',
+                    border: enBloque ? '2px solid #e0a013' : seleccionado ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    background: enBloque ? '#fff8ea' : delMes ? '#fff' : '#fafafa',
                     opacity: delMes ? 1 : 0.5,
                   }}
                 >
@@ -219,6 +328,11 @@ export default function Programaciones() {
                     {fecha.getDate()}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 4 }}>
+                    {bloquesDia.slice(0, 1).map((b) => (
+                      <div key={`b-${b.id}`} style={{ fontSize: 10, background: '#e0a013', color: '#fff', borderRadius: 4, padding: '1px 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        📌 {b.title}
+                      </div>
+                    ))}
                     {sesionesDia.slice(0, 2).map((s) => (
                       <div key={s.id} style={{ fontSize: 10, background: COLOR_TIPO[s.type], color: '#fff', borderRadius: 4, padding: '1px 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {ICONO_TIPO[s.type]} {s.startTime} {s.student.firstName}
@@ -234,11 +348,73 @@ export default function Programaciones() {
           </div>
         </div>
 
-        {diaSeleccionado && (
+        {modoBloque ? (
+          <div className="card">
+            <h3 style={{ marginTop: 0, fontSize: 14 }}>📌 {editandoBloqueId ? 'Editar evento de varios días' : 'Nuevo evento de varios días'}</h3>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              Haz clic en los días del calendario para agregarlos o quitarlos del evento.
+            </p>
+
+            <div style={{ fontSize: 13, marginBottom: 10 }}>
+              {diasBloqueSeleccionados.length === 0 ? (
+                <span style={{ color: 'var(--text-muted)' }}>Ningún día seleccionado todavía.</span>
+              ) : (
+                <>
+                  <strong>{diasBloqueSeleccionados.length}</strong> día{diasBloqueSeleccionados.length === 1 ? '' : 's'} seleccionado{diasBloqueSeleccionados.length === 1 ? '' : 's'}:{' '}
+                  {diasBloqueSeleccionados.map((d) => new Date(d + 'T00:00:00').toLocaleDateString('es-PE', { day: 'numeric', month: 'short' })).join(', ')}
+                </>
+              )}
+            </div>
+
+            <form onSubmit={guardarBloque}>
+              <div className="field">
+                <label>Título</label>
+                <input value={formBloque.title} onChange={(e) => setFormBloque({ ...formBloque, title: e.target.value })} placeholder="Ej: Semana de exámenes" required />
+              </div>
+              <div className="field">
+                <label>Descripción (opcional)</label>
+                <textarea
+                  value={formBloque.description}
+                  onChange={(e) => setFormBloque({ ...formBloque, description: e.target.value })}
+                  rows={3}
+                  style={{ resize: 'vertical' }}
+                />
+              </div>
+
+              {errorBloque && <div className="error-text">{errorBloque}</div>}
+
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button className="btn" disabled={guardandoBloque}>
+                  {guardandoBloque ? 'Guardando...' : editandoBloqueId ? 'Guardar cambios' : 'Guardar evento'}
+                </button>
+                <button type="button" className="btn secondary" onClick={cancelarModoBloque}>Cancelar</button>
+              </div>
+            </form>
+          </div>
+        ) : diaSeleccionado && (
           <div className="card">
             <h3 style={{ marginTop: 0, fontSize: 14 }}>
               📅 {new Date(diaSeleccionado + 'T00:00:00').toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long' })}
             </h3>
+
+            {bloquesDelDia.map((b) => (
+              <div key={`bloque-${b.id}`} className="card" style={{ marginBottom: 10, borderLeft: '4px solid #e0a013' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 16 }}>📌</span>
+                  <strong style={{ fontSize: 13 }}>{b.title}</strong>
+                </div>
+                {b.description && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{b.description}</div>}
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                  Creado por {b.createdBy.firstName} {b.createdBy.lastName}
+                </div>
+                {(puedeGestionarBloques && (user?.role === 'ADMIN' || b.createdBy.id === user?.id)) && (
+                  <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+                    <button className="btn secondary" style={{ padding: '3px 10px', fontSize: 11 }} onClick={() => empezarEdicionBloque(b)}>Editar</button>
+                    <button className="btn danger" style={{ padding: '3px 10px', fontSize: 11 }} onClick={() => eliminarBloque(b.id)}>Eliminar</button>
+                  </div>
+                )}
+              </div>
+            ))}
 
             {sesionesDelDia.map((s) => (
               <div key={s.id} className="card" style={{ marginBottom: 10, borderLeft: `4px solid ${COLOR_TIPO[s.type]}` }}>
