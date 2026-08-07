@@ -26,12 +26,20 @@ export default function Programaciones() {
   const [simulatorTypes, setSimulatorTypes] = useState([]);
   const [theoryTopics, setTheoryTopics] = useState([]);
 
+  // --- Programar una promoción completa (grupo de alumnos) de una sola vez ---
+  const [promociones, setPromociones] = useState([]);
+  const [modoProgramar, setModoProgramar] = useState('individual'); // 'individual' | 'promocion'
+  const [formPromo, setFormPromo] = useState({ promotionId: '', type: 'TEORIA', instructorId: '', startTime: '09:00', endTime: '10:00', notes: '', aircraftTypeId: '', simulatorTypeId: '', theoryTopicId: '' });
+  const [guardandoPromo, setGuardandoPromo] = useState(false);
+  const [errorPromo, setErrorPromo] = useState('');
+  const [resultadoPromo, setResultadoPromo] = useState(null);
+
   // --- Eventos/notas de varios días (Secretaría, o quien tenga el permiso) ---
   const [puedeGestionarBloques, setPuedeGestionarBloques] = useState(false);
   const [bloques, setBloques] = useState([]);
   const [modoBloque, setModoBloque] = useState(false);
   const [diasBloqueSeleccionados, setDiasBloqueSeleccionados] = useState([]);
-  const [formBloque, setFormBloque] = useState({ title: '', description: '' });
+  const [formBloque, setFormBloque] = useState({ title: '', description: '', promotionId: '' });
   const [editandoBloqueId, setEditandoBloqueId] = useState(null);
   const [guardandoBloque, setGuardandoBloque] = useState(false);
   const [errorBloque, setErrorBloque] = useState('');
@@ -39,7 +47,7 @@ export default function Programaciones() {
   useEffect(() => { cargar(); }, []);
 
   async function cargar() {
-    const [s, e, u, av, sim, temas, b, yo] = await Promise.all([
+    const [s, e, u, av, sim, temas, b, yo, promos] = await Promise.all([
       api.get('/schedules'),
       api.get('/students'),
       api.get('/users'),
@@ -48,6 +56,7 @@ export default function Programaciones() {
       api.get('/theory-topics'),
       api.get('/schedules/bloques'),
       api.get('/auth/me'),
+      api.get('/promotions'),
     ]);
     setSesiones(s.data);
     setEstudiantes(e.data);
@@ -57,6 +66,7 @@ export default function Programaciones() {
     setTheoryTopics(temas.data);
     setBloques(b.data);
     setPuedeGestionarBloques(yo.data.role === 'ADMIN' || !!yo.data.canManageScheduleBlocks);
+    setPromociones(promos.data);
   }
 
   const semanas = useMemo(() => generarMes(year, month), [year, month]);
@@ -103,6 +113,8 @@ export default function Programaciones() {
   function seleccionarDia(fecha) {
     setDiaSeleccionado(aFechaLocal(fecha));
     limpiarFormulario();
+    setModoProgramar('individual');
+    limpiarFormPromo();
   }
 
   function limpiarFormulario() {
@@ -190,11 +202,39 @@ export default function Programaciones() {
     cargar();
   }
 
+  function limpiarFormPromo() {
+    setFormPromo({ promotionId: '', type: 'TEORIA', instructorId: '', startTime: '09:00', endTime: '10:00', notes: '', aircraftTypeId: '', simulatorTypeId: '', theoryTopicId: '' });
+    setErrorPromo('');
+    setResultadoPromo(null);
+  }
+
+  async function guardarSesionPromocion(e) {
+    e.preventDefault();
+    setErrorPromo('');
+    setResultadoPromo(null);
+    if (!formPromo.promotionId) { setErrorPromo('Elige una promoción'); return; }
+    if (!formPromo.instructorId) { setErrorPromo('Elige un instructor'); return; }
+    if (formPromo.type === 'VUELO' && !formPromo.aircraftTypeId) { setErrorPromo('Elige el tipo de avión'); return; }
+    if (formPromo.type === 'SIMULADOR' && !formPromo.simulatorTypeId) { setErrorPromo('Elige el tipo de simulador'); return; }
+    if (formPromo.type === 'TEORIA' && !formPromo.theoryTopicId) { setErrorPromo('Elige el tema de teoría'); return; }
+    setGuardandoPromo(true);
+    try {
+      const { data } = await api.post('/schedules/promocion', { ...formPromo, date: diaSeleccionado });
+      setResultadoPromo(`✓ Se programó ${LABEL_TIPO[formPromo.type]} para ${data.cantidadAlumnos} alumno(s) de ${data.promotion.name}.`);
+      setFormPromo((f) => ({ ...f, notes: '' }));
+      cargar();
+    } catch (err) {
+      setErrorPromo(err.response?.data?.error || 'No se pudo programar la sesión para la promoción');
+    } finally {
+      setGuardandoPromo(false);
+    }
+  }
+
   function activarModoBloque() {
     setModoBloque(true);
     setDiasBloqueSeleccionados([]);
     setEditandoBloqueId(null);
-    setFormBloque({ title: '', description: '' });
+    setFormBloque({ title: '', description: '', promotionId: '' });
     setErrorBloque('');
   }
 
@@ -202,7 +242,7 @@ export default function Programaciones() {
     setModoBloque(false);
     setDiasBloqueSeleccionados([]);
     setEditandoBloqueId(null);
-    setFormBloque({ title: '', description: '' });
+    setFormBloque({ title: '', description: '', promotionId: '' });
     setErrorBloque('');
   }
 
@@ -217,7 +257,7 @@ export default function Programaciones() {
     setModoBloque(true);
     setEditandoBloqueId(b.id);
     setDiasBloqueSeleccionados([...b.dates].sort());
-    setFormBloque({ title: b.title, description: b.description || '' });
+    setFormBloque({ title: b.title, description: b.description || '', promotionId: b.promotionId || '' });
     setErrorBloque('');
   }
 
@@ -231,10 +271,12 @@ export default function Programaciones() {
       if (editandoBloqueId) {
         await api.patch(`/schedules/bloques/${editandoBloqueId}`, {
           title: formBloque.title, description: formBloque.description, dates: diasBloqueSeleccionados,
+          promotionId: formBloque.promotionId || null,
         });
       } else {
         await api.post('/schedules/bloques', {
           title: formBloque.title, description: formBloque.description, dates: diasBloqueSeleccionados,
+          promotionId: formBloque.promotionId || null,
         });
       }
       cancelarModoBloque();
@@ -380,6 +422,13 @@ export default function Programaciones() {
                   style={{ resize: 'vertical' }}
                 />
               </div>
+              <div className="field">
+                <label>Dirigido a una promoción (opcional)</label>
+                <select value={formBloque.promotionId} onChange={(e) => setFormBloque({ ...formBloque, promotionId: e.target.value })}>
+                  <option value="">General (para todos)</option>
+                  {promociones.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
 
               {errorBloque && <div className="error-text">{errorBloque}</div>}
 
@@ -404,6 +453,7 @@ export default function Programaciones() {
                   <strong style={{ fontSize: 13 }}>{b.title}</strong>
                 </div>
                 {b.description && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{b.description}</div>}
+                {b.promotion && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>👥 {b.promotion.name}</div>}
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
                   Creado por {b.createdBy.firstName} {b.createdBy.lastName}
                 </div>
@@ -429,6 +479,7 @@ export default function Programaciones() {
                 <div style={{ fontSize: 13 }}>
                   👤 {s.instructor.firstName} {s.instructor.lastName}
                 </div>
+                {s.promotion && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>👥 {s.promotion.name}</div>}
                 {s.notes && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{s.notes}</div>}
                 {puedeGestionar && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
@@ -443,7 +494,130 @@ export default function Programaciones() {
             )}
 
             {puedeGestionar && (
-              <form onSubmit={guardarSesion} style={{ borderTop: '1px solid var(--border)', paddingTop: 10, marginTop: 4 }}>
+              <div style={{ display: 'flex', gap: 6, borderTop: '1px solid var(--border)', paddingTop: 10, marginTop: 4, marginBottom: 10 }}>
+                <button
+                  type="button"
+                  className={`btn ${modoProgramar === 'individual' ? '' : 'secondary'}`}
+                  style={{ padding: '5px 12px', fontSize: 12 }}
+                  onClick={() => { setModoProgramar('individual'); limpiarFormPromo(); }}
+                >
+                  Individual
+                </button>
+                <button
+                  type="button"
+                  className={`btn ${modoProgramar === 'promocion' ? '' : 'secondary'}`}
+                  style={{ padding: '5px 12px', fontSize: 12 }}
+                  onClick={() => { setModoProgramar('promocion'); limpiarFormulario(); }}
+                >
+                  👥 Promoción completa
+                </button>
+              </div>
+            )}
+
+            {puedeGestionar && modoProgramar === 'promocion' && (
+              <form onSubmit={guardarSesionPromocion}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>
+                  👥 Programar para una promoción completa
+                </div>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 0 }}>
+                  Se crea la misma sesión para cada alumno activo de la promoción, y se le suman las
+                  horas correspondientes a cada uno automáticamente.
+                </p>
+
+                <div className="field">
+                  <label>Promoción</label>
+                  <select value={formPromo.promotionId} onChange={(e) => setFormPromo({ ...formPromo, promotionId: e.target.value })} required>
+                    <option value="">Selecciona una promoción</option>
+                    {promociones.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name} ({p._count?.students ?? 0} alumnos)</option>
+                    ))}
+                  </select>
+                  {promociones.length === 0 && (
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                      Todavía no hay promociones creadas — créalas en Alumnos → Catálogos.
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ marginBottom: 12 }}>
+                  <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Tipo</label>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {TIPOS.map((t) => (
+                      <button
+                        key={t.value}
+                        type="button"
+                        onClick={() => setFormPromo({ ...formPromo, type: t.value })}
+                        style={{
+                          flex: 1, padding: '8px 4px', borderRadius: 10, cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                          border: formPromo.type === t.value ? `2px solid ${t.color}` : '2px solid var(--border)',
+                          background: formPromo.type === t.value ? `${t.color}14` : '#fff',
+                          color: formPromo.type === t.value ? t.color : 'var(--text)',
+                        }}
+                      >
+                        <div style={{ fontSize: 16, marginBottom: 2 }}>{ICONO_TIPO[t.value]}</div>
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {formPromo.type === 'TEORIA' && (
+                  <div className="field">
+                    <label>Tema de teoría</label>
+                    <select value={formPromo.theoryTopicId} onChange={(e) => setFormPromo({ ...formPromo, theoryTopicId: e.target.value })}>
+                      <option value="">Selecciona el tema</option>
+                      {theoryTopics.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                  </div>
+                )}
+                {formPromo.type === 'VUELO' && (
+                  <div className="field">
+                    <label>Tipo de avión</label>
+                    <select value={formPromo.aircraftTypeId} onChange={(e) => setFormPromo({ ...formPromo, aircraftTypeId: e.target.value })}>
+                      <option value="">Selecciona el tipo de avión</option>
+                      {aircraftTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                  </div>
+                )}
+                {formPromo.type === 'SIMULADOR' && (
+                  <div className="field">
+                    <label>Tipo de simulador</label>
+                    <select value={formPromo.simulatorTypeId} onChange={(e) => setFormPromo({ ...formPromo, simulatorTypeId: e.target.value })}>
+                      <option value="">Selecciona el tipo de simulador</option>
+                      {simulatorTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                  </div>
+                )}
+
+                <div className="field">
+                  <label>Instructor</label>
+                  <select value={formPromo.instructorId} onChange={(e) => setFormPromo({ ...formPromo, instructorId: e.target.value })}>
+                    <option value="">Selecciona un instructor</option>
+                    {instructores.map((i) => <option key={i.id} value={i.id}>{i.firstName} {i.lastName}</option>)}
+                  </select>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div className="field"><label>Desde</label><input type="time" value={formPromo.startTime} onChange={(e) => setFormPromo({ ...formPromo, startTime: e.target.value })} /></div>
+                  <div className="field"><label>Hasta</label><input type="time" value={formPromo.endTime} onChange={(e) => setFormPromo({ ...formPromo, endTime: e.target.value })} /></div>
+                </div>
+
+                <div className="field">
+                  <label>Notas (opcional)</label>
+                  <input value={formPromo.notes} onChange={(e) => setFormPromo({ ...formPromo, notes: e.target.value })} />
+                </div>
+
+                {errorPromo && <div className="error-text">{errorPromo}</div>}
+                {resultadoPromo && <div style={{ color: 'var(--success)', fontSize: 13, marginBottom: 8 }}>{resultadoPromo}</div>}
+
+                <button className="btn" disabled={guardandoPromo}>
+                  {guardandoPromo ? 'Programando...' : 'Programar para toda la promoción'}
+                </button>
+              </form>
+            )}
+
+            {puedeGestionar && modoProgramar === 'individual' && (
+              <form onSubmit={guardarSesion}>
                 <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>
                   {editandoId ? '✏️ Editar sesión' : '+ Programar sesión nueva'}
                 </div>
