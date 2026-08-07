@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import api from '../../api/client';
 import AreaChip from '../../components/AreaChip.jsx';
 
-const ROLES = ['ADMIN', 'GERENCIA', 'RRHH', 'MARKETING', 'VENTAS', 'INSTRUCTOR', 'EMPLEADO'];
+const ROLES = ['ADMIN', 'GERENCIA', 'RRHH', 'MARKETING', 'VENTAS', 'INSTRUCTOR', 'SECRETARIA', 'EMPLEADO'];
 
 export default function Usuarios() {
   const [usuarios, setUsuarios] = useState([]);
@@ -65,6 +65,11 @@ export default function Usuarios() {
 
   async function alternarVerPagos(u) {
     await api.patch(`/users/${u.id}`, { canViewPayments: !u.canViewPayments });
+    cargar();
+  }
+
+  async function alternarBloquesProgramaciones(u) {
+    await api.patch(`/users/${u.id}`, { canManageScheduleBlocks: !u.canManageScheduleBlocks });
     cargar();
   }
 
@@ -181,6 +186,7 @@ export default function Usuarios() {
               <th>Áreas</th>
               <th>Jefe directo</th>
               <th>Ver pagos</th>
+              <th>Bloques prog.</th>
               <th></th>
             </tr>
           </thead>
@@ -223,6 +229,7 @@ export default function Usuarios() {
                     />
                   </td>
                   <td>—</td>
+                  <td>—</td>
                   <td>
                     <div style={{ display: 'flex', gap: 4 }}>
                       <button className="btn" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => guardarEdicion(u.id)}>Guardar</button>
@@ -250,6 +257,13 @@ export default function Usuarios() {
                       <span title="Siempre tiene acceso por su rol" style={{ fontSize: 11, color: 'var(--text-muted)' }}>Siempre</span>
                     ) : (
                       <input type="checkbox" checked={!!u.canViewPayments} onChange={() => alternarVerPagos(u)} />
+                    )}
+                  </td>
+                  <td style={{ textAlign: 'center' }}>
+                    {u.role === 'ADMIN' ? (
+                      <span title="Siempre tiene acceso por su rol" style={{ fontSize: 11, color: 'var(--text-muted)' }}>Siempre</span>
+                    ) : (
+                      <input type="checkbox" checked={!!u.canManageScheduleBlocks} onChange={() => alternarBloquesProgramaciones(u)} title="Puede crear eventos/notas sobre varios días en Programaciones" />
                     )}
                   </td>
                   <td>
