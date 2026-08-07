@@ -76,7 +76,7 @@ router.get('/me', requireAuth, async (req, res) => {
     select: {
       id: true, username: true, firstName: true, lastName: true, email: true,
       role: true, cargo: true, schedule: true, scheduleNote: true, signatureData: true,
-      profilePhoto: true, canViewPayments: true,
+      profilePhoto: true, canViewPayments: true, canManageScheduleBlocks: true,
       workStatus: true, mustChangePassword: true, vacationDaysTotal: true,
       vacationDaysUsed: true,
       areas: { include: { area: true } },
