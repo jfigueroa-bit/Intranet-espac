@@ -6,7 +6,7 @@ const { siguienteCodigoAlumno } = require('../utils/studentCode');
 
 const router = express.Router();
 
-const INCLUIR = { course: true };
+const INCLUIR = { course: true, promotion: true };
 
 // Convierte "YYYY-MM-DD" a mediodía UTC de ese día, para que no se desfase por zona horaria
 function fechaSoloDia(texto) {
@@ -44,7 +44,7 @@ router.get('/:id', requireAuth, async (req, res) => {
 
 // POST /api/students -> matricula un alumno nuevo (el código se genera solo)
 router.post('/', requireAuth, requireRole('ADMIN', 'GERENCIA', 'VENTAS'), async (req, res) => {
-  const { firstName, lastName, email, phone, courseId, notes, enrollmentDate } = req.body;
+  const { firstName, lastName, email, phone, courseId, promotionId, notes, enrollmentDate } = req.body;
   if (!firstName?.trim() || !lastName?.trim()) {
     return res.status(400).json({ error: 'Nombre y apellido son obligatorios' });
   }
@@ -60,6 +60,7 @@ router.post('/', requireAuth, requireRole('ADMIN', 'GERENCIA', 'VENTAS'), async 
       email: email || null,
       phone: phone || null,
       courseId: courseId ? Number(courseId) : null,
+      promotionId: promotionId ? Number(promotionId) : null,
       notes: notes || null,
       enrollmentDate: enrollmentDate ? fechaSoloDia(enrollmentDate) : new Date(),
     },
@@ -132,7 +133,7 @@ router.post('/importar', requireAuth, requireRole('ADMIN', 'GERENCIA', 'VENTAS')
 router.patch('/:id', requireAuth, requireRole('ADMIN', 'GERENCIA', 'VENTAS', 'INSTRUCTOR'), async (req, res) => {
   const id = Number(req.params.id);
   const {
-    firstName, lastName, email, phone, courseId,
+    firstName, lastName, email, phone, courseId, promotionId,
     groundCourseHours, flightHours, simulatorHours, notes, isActive, enrollmentDate,
   } = req.body;
 
@@ -142,6 +143,7 @@ router.patch('/:id', requireAuth, requireRole('ADMIN', 'GERENCIA', 'VENTAS', 'IN
   if (email !== undefined) data.email = email || null;
   if (phone !== undefined) data.phone = phone || null;
   if (courseId !== undefined) data.courseId = courseId ? Number(courseId) : null;
+  if (promotionId !== undefined) data.promotionId = promotionId ? Number(promotionId) : null;
   if (groundCourseHours !== undefined) data.groundCourseHours = Number(groundCourseHours) || 0;
   if (flightHours !== undefined) data.flightHours = Number(flightHours) || 0;
   if (simulatorHours !== undefined) data.simulatorHours = Number(simulatorHours) || 0;
