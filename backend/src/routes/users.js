@@ -15,6 +15,7 @@ const USER_LISTADO = {
   role: true, cargo: true, workStatus: true, isActive: true,
   hierarchyOrder: true, managerId: true, vacationDaysTotal: true,
   vacationDaysUsed: true, schedule: true, scheduleNote: true, canViewPayments: true,
+  canManageScheduleBlocks: true,
   areas: { include: { area: true } },
 };
 
@@ -123,7 +124,7 @@ router.patch('/:id', requireAuth, requireRole('ADMIN'), async (req, res) => {
   const id = Number(req.params.id);
   const {
     firstName, lastName, email, role, cargo, workStatus,
-    managerId, hierarchyOrder, areaIds, isActive, canViewPayments,
+    managerId, hierarchyOrder, areaIds, isActive, canViewPayments, canManageScheduleBlocks,
   } = req.body;
 
   const data = {};
@@ -137,6 +138,7 @@ router.patch('/:id', requireAuth, requireRole('ADMIN'), async (req, res) => {
   if (hierarchyOrder !== undefined) data.hierarchyOrder = hierarchyOrder;
   if (isActive !== undefined) data.isActive = isActive;
   if (canViewPayments !== undefined) data.canViewPayments = canViewPayments;
+  if (canManageScheduleBlocks !== undefined) data.canManageScheduleBlocks = canManageScheduleBlocks;
 
   if (Array.isArray(areaIds)) {
     await prisma.userArea.deleteMany({ where: { userId: id } });
