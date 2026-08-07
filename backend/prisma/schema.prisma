@@ -20,6 +20,7 @@ enum Role {
   VENTAS
   INSTRUCTOR
   EMPLEADO
+  SECRETARIA
 }
 
 enum WorkStatus {
@@ -71,6 +72,7 @@ model User {
   vacationDaysUsed    Int        @default(0)
   isActive            Boolean    @default(true)
   canViewPayments     Boolean    @default(false) // permiso individual (no por rol) para ver cuotas/pagos de alumnos
+  canManageScheduleBlocks Boolean @default(false) // permiso individual para crear eventos/notas de varios días en Programaciones (pensado para el rol SECRETARIA)
   createdAt           DateTime   @default(now())
   updatedAt           DateTime   @updatedAt
 
@@ -101,6 +103,7 @@ model User {
   simuladoresRegistrados SimulatorLogEntry[] @relation("SimuladoresRegistrados")
   temasRegistrados       TheoryLogEntry[] @relation("TemasRegistrados")
   notasActualizadas      CurriculumGrade[] @relation("NotasActualizadas")
+  bloquesCreados         ScheduleBlockNote[] @relation("BloquesCreados")
 }
 
 model Announcement {
@@ -358,6 +361,21 @@ model ScheduleSession {
   createdById  Int
   createdBy    User     @relation("SesionesCreadas", fields: [createdById], references: [id])
   createdAt    DateTime @default(now())
+}
+
+// Evento/nota libre que cubre un conjunto de días (no necesariamente
+// consecutivos) dentro del calendario de Programaciones. Pensado para que
+// Secretaría (o quien tenga el permiso individual canManageScheduleBlocks)
+// marque, por ejemplo, "Semana de exámenes" o "Mantenimiento de simuladores"
+// sobre varios días a la vez, sin crear una sesión por cada uno.
+model ScheduleBlockNote {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String?  @db.Text
+  dates       Json     // arreglo de fechas "YYYY-MM-DD" a las que aplica esta nota
+  createdById Int
+  createdBy   User     @relation("BloquesCreados", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
 }
 
 model Request {
