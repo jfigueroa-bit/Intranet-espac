@@ -22,6 +22,16 @@ function fechaSoloDia(texto) {
   return new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
 }
 
+// Admin siempre puede; cualquier otra persona necesita el permiso individual
+// "canManageScheduleBlocks", que un Admin le otorga a mano desde Usuarios
+// (pensado sobre todo para el rol SECRETARIA).
+async function requireGestionarBloques(req, res, next) {
+  if (req.user.role === 'ADMIN') return next();
+  const yo = await prisma.user.findUnique({ where: { id: req.user.id }, select: { canManageScheduleBlocks: true } });
+  if (yo?.canManageScheduleBlocks) return next();
+  return res.status(403).json({ error: 'No tienes permiso para crear eventos de varios días en Programaciones' });
+}
+
 // GET /api/schedules -> todas las sesiones (cualquier usuario logueado las puede ver)
 router.get('/', requireAuth, async (req, res) => {
   const { instructorId, studentId } = req.query;
@@ -109,6 +119,80 @@ router.delete('/:id', requireAuth, requireRole('ADMIN', 'GERENCIA', 'INSTRUCTOR'
     link: '/programaciones',
   });
 
+  res.json({ ok: true });
+});
+
+// GET /api/schedules/bloques -> todos los eventos/notas de varios días (cualquiera los puede ver)
+router.get('/bloques', requireAuth, async (req, res) => {
+  const bloques = await prisma.scheduleBlockNote.findMany({
+    include: { createdBy: { select: PERSONA_INFO } },
+    orderBy: { createdAt: 'desc' },
+  });
+  res.json(bloques);
+});
+
+// POST /api/schedules/bloques -> crea un evento/nota sobre un conjunto de días
+router.post('/bloques', requireAuth, requireGestionarBloques, async (req, res) => {
+  const { title, description, dates } = req.body;
+  if (!title?.trim()) return res.status(400).json({ error: 'Falta el título' });
+  if (!Array.isArray(dates) || dates.length === 0) {
+    return res.status(400).json({ error: 'Elige al menos un día' });
+  }
+
+  const bloque = await prisma.scheduleBlockNote.create({
+    data: {
+      title: title.trim(),
+      description: description?.trim() || null,
+      dates,
+      createdById: req.user.id,
+    },
+    include: { createdBy: { select: PERSONA_INFO } },
+  });
+
+  res.status(201).json(bloque);
+});
+
+// PATCH /api/schedules/bloques/:id -> edita un evento de varios días (su creador o Admin)
+router.patch('/bloques/:id', requireAuth, requireGestionarBloques, async (req, res) => {
+  const id = Number(req.params.id);
+  const { title, description, dates } = req.body;
+
+  const existente = await prisma.scheduleBlockNote.findUnique({ where: { id } });
+  if (!existente) return res.status(404).json({ error: 'No encontrado' });
+  if (req.user.role !== 'ADMIN' && existente.createdById !== req.user.id) {
+    return res.status(403).json({ error: 'Solo puedes editar los eventos que tú creaste' });
+  }
+
+  const data = {};
+  if (title !== undefined) {
+    if (!title.trim()) return res.status(400).json({ error: 'El título no puede quedar vacío' });
+    data.title = title.trim();
+  }
+  if (description !== undefined) data.description = description?.trim() || null;
+  if (dates !== undefined) {
+    if (!Array.isArray(dates) || dates.length === 0) {
+      return res.status(400).json({ error: 'Elige al menos un día' });
+    }
+    data.dates = dates;
+  }
+
+  const actualizado = await prisma.scheduleBlockNote.update({
+    where: { id },
+    data,
+    include: { createdBy: { select: PERSONA_INFO } },
+  });
+  res.json(actualizado);
+});
+
+// DELETE /api/schedules/bloques/:id -> elimina un evento de varios días (su creador o Admin)
+router.delete('/bloques/:id', requireAuth, requireGestionarBloques, async (req, res) => {
+  const id = Number(req.params.id);
+  const existente = await prisma.scheduleBlockNote.findUnique({ where: { id } });
+  if (!existente) return res.status(404).json({ error: 'No encontrado' });
+  if (req.user.role !== 'ADMIN' && existente.createdById !== req.user.id) {
+    return res.status(403).json({ error: 'Solo puedes eliminar los eventos que tú creaste' });
+  }
+  await prisma.scheduleBlockNote.delete({ where: { id } });
   res.json({ ok: true });
 });
 
