@@ -11,6 +11,7 @@ const INCLUIR = {
   student: { select: { id: true, code: true, firstName: true, lastName: true } },
   instructor: { select: PERSONA_INFO },
   createdBy: { select: PERSONA_INFO },
+  promotion: true,
 };
 
 const TIPOS_VALIDOS = ['TEORIA', 'SIMULADOR', 'VUELO'];
@@ -122,18 +123,113 @@ router.delete('/:id', requireAuth, requireRole('ADMIN', 'GERENCIA', 'INSTRUCTOR'
   res.json({ ok: true });
 });
 
+const INCLUIR_BLOQUE = { createdBy: { select: PERSONA_INFO }, promotion: { include: { course: true } } };
+
+// POST /api/schedules/promocion -> programa la MISMA sesión para todos los alumnos
+// activos de una promoción de una sola vez: crea una ScheduleSession por alumno
+// (marcada con promotionId) y, según el tipo, el registro de horas correspondiente
+// (vuelo/simulador/teoría), igual que si se hubiera programado uno por uno.
+router.post('/promocion', requireAuth, requireRole('ADMIN', 'GERENCIA', 'INSTRUCTOR'), async (req, res) => {
+  const {
+    promotionId, type, date, startTime, endTime, instructorId, notes,
+    aircraftTypeId, simulatorTypeId, theoryTopicId,
+  } = req.body;
+
+  if (!promotionId) return res.status(400).json({ error: 'Elige una promoción' });
+  if (!TIPOS_VALIDOS.includes(type)) return res.status(400).json({ error: 'Tipo de sesión no válido' });
+  if (!date || !startTime || !endTime) return res.status(400).json({ error: 'Faltan la fecha y los horarios' });
+  if (!instructorId) return res.status(400).json({ error: 'Falta el instructor' });
+  if (type === 'VUELO' && !aircraftTypeId) return res.status(400).json({ error: 'Elige el tipo de avión' });
+  if (type === 'SIMULADOR' && !simulatorTypeId) return res.status(400).json({ error: 'Elige el tipo de simulador' });
+  if (type === 'TEORIA' && !theoryTopicId) return res.status(400).json({ error: 'Elige el tema de teoría' });
+
+  const promocion = await prisma.promotion.findUnique({ where: { id: Number(promotionId) } });
+  if (!promocion) return res.status(404).json({ error: 'Promoción no encontrada' });
+
+  const alumnos = await prisma.student.findMany({
+    where: { promotionId: Number(promotionId), isActive: true },
+    select: { id: true, firstName: true, lastName: true },
+  });
+  if (alumnos.length === 0) {
+    return res.status(400).json({ error: 'Esta promoción no tiene alumnos activos' });
+  }
+
+  const [h1, m1] = startTime.split(':').map(Number);
+  const [h2, m2] = endTime.split(':').map(Number);
+  const horas = Math.max((h2 * 60 + m2) - (h1 * 60 + m1), 0) / 60;
+  const fecha = fechaSoloDia(date);
+
+  const sesiones = [];
+  for (const alumno of alumnos) {
+    const operaciones = [
+      prisma.scheduleSession.create({
+        data: {
+          type,
+          date: fecha,
+          startTime,
+          endTime,
+          studentId: alumno.id,
+          instructorId: Number(instructorId),
+          notes: notes || null,
+          promotionId: Number(promotionId),
+          createdById: req.user.id,
+        },
+        include: INCLUIR,
+      }),
+    ];
+
+    if (type === 'VUELO') {
+      operaciones.push(
+        prisma.flightLogEntry.create({
+          data: { studentId: alumno.id, aircraftTypeId: Number(aircraftTypeId), hours: horas, date: fecha, notes: notes || `Programado con ${promocion.name}`, createdById: req.user.id },
+        }),
+        prisma.student.update({ where: { id: alumno.id }, data: { flightHours: { increment: horas } } })
+      );
+    } else if (type === 'SIMULADOR') {
+      operaciones.push(
+        prisma.simulatorLogEntry.create({
+          data: { studentId: alumno.id, simulatorTypeId: Number(simulatorTypeId), hours: horas, date: fecha, notes: notes || `Programado con ${promocion.name}`, createdById: req.user.id },
+        }),
+        prisma.student.update({ where: { id: alumno.id }, data: { simulatorHours: { increment: horas } } })
+      );
+    } else if (type === 'TEORIA') {
+      operaciones.push(
+        prisma.theoryLogEntry.create({
+          data: { studentId: alumno.id, theoryTopicId: Number(theoryTopicId), hours: horas, date: fecha, notes: notes || `Programado con ${promocion.name}`, createdById: req.user.id },
+        }),
+        prisma.student.update({ where: { id: alumno.id }, data: { groundCourseHours: { increment: horas } } })
+      );
+    }
+
+    const [sesion] = await prisma.$transaction(operaciones);
+    sesiones.push(sesion);
+  }
+
+  const fechaTexto = fecha.toLocaleDateString('es-PE', { day: 'numeric', month: 'long', timeZone: 'UTC' });
+  await notificar({
+    userId: Number(instructorId),
+    type: 'PROGRAMACION',
+    title: 'Sesión programada para una promoción completa',
+    message: `${TIPOS_LABEL[type]} con ${promocion.name} (${alumnos.length} alumnos) el ${fechaTexto}, ${startTime}-${endTime}.`,
+    link: '/programaciones',
+  });
+
+  res.status(201).json({ promotion: promocion, cantidadAlumnos: alumnos.length, sesiones });
+});
+
 // GET /api/schedules/bloques -> todos los eventos/notas de varios días (cualquiera los puede ver)
 router.get('/bloques', requireAuth, async (req, res) => {
   const bloques = await prisma.scheduleBlockNote.findMany({
-    include: { createdBy: { select: PERSONA_INFO } },
+    include: INCLUIR_BLOQUE,
     orderBy: { createdAt: 'desc' },
   });
   res.json(bloques);
 });
 
 // POST /api/schedules/bloques -> crea un evento/nota sobre un conjunto de días
+// (opcionalmente dirigido a una promoción específica, con promotionId)
 router.post('/bloques', requireAuth, requireGestionarBloques, async (req, res) => {
-  const { title, description, dates } = req.body;
+  const { title, description, dates, promotionId } = req.body;
   if (!title?.trim()) return res.status(400).json({ error: 'Falta el título' });
   if (!Array.isArray(dates) || dates.length === 0) {
     return res.status(400).json({ error: 'Elige al menos un día' });
@@ -144,9 +240,10 @@ router.post('/bloques', requireAuth, requireGestionarBloques, async (req, res) =
       title: title.trim(),
       description: description?.trim() || null,
       dates,
+      promotionId: promotionId ? Number(promotionId) : null,
       createdById: req.user.id,
     },
-    include: { createdBy: { select: PERSONA_INFO } },
+    include: INCLUIR_BLOQUE,
   });
 
   res.status(201).json(bloque);
@@ -155,7 +252,7 @@ router.post('/bloques', requireAuth, requireGestionarBloques, async (req, res) =
 // PATCH /api/schedules/bloques/:id -> edita un evento de varios días (su creador o Admin)
 router.patch('/bloques/:id', requireAuth, requireGestionarBloques, async (req, res) => {
   const id = Number(req.params.id);
-  const { title, description, dates } = req.body;
+  const { title, description, dates, promotionId } = req.body;
 
   const existente = await prisma.scheduleBlockNote.findUnique({ where: { id } });
   if (!existente) return res.status(404).json({ error: 'No encontrado' });
@@ -175,11 +272,12 @@ router.patch('/bloques/:id', requireAuth, requireGestionarBloques, async (req, r
     }
     data.dates = dates;
   }
+  if (promotionId !== undefined) data.promotionId = promotionId ? Number(promotionId) : null;
 
   const actualizado = await prisma.scheduleBlockNote.update({
     where: { id },
     data,
-    include: { createdBy: { select: PERSONA_INFO } },
+    include: INCLUIR_BLOQUE,
   });
   res.json(actualizado);
 });
